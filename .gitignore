@@ -1,0 +1,12 @@
+# dependencies
+node_modules/
+
+# crawl artifacts (regenerable)
+crawl/out/
+crawl/azure-fundamentals-cloud-concepts.md
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
