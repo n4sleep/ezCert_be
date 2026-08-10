@@ -1,0 +1,452 @@
+{
+  "certification": "AZ-900",
+  "title": "Microsoft Azure Fundamentals - Describe cloud concepts",
+  "sections": [
+    { "id": "cloud-computing", "name": "Describe cloud computing" },
+    { "id": "service-types", "name": "Describe cloud service types" },
+    { "id": "benefits", "name": "Describe the benefits of using cloud services" }
+  ],
+  "questions": [
+    {
+      "id": "c1",
+      "section": "cloud-computing",
+      "sectionTitle": "Describe cloud computing",
+      "type": "single",
+      "difficulty": "easy",
+      "text": "Which statement best describes cloud computing?",
+      "choices": [
+        { "id": "a", "text": "The delivery of computing services over the internet" },
+        { "id": "b", "text": "A single physical server located in a company's office" },
+        { "id": "c", "text": "A software application installed locally on every laptop" },
+        { "id": "d", "text": "A private network that cannot reach the public internet" }
+      ],
+      "correct": ["a"],
+      "explanation": "Cloud computing is the delivery of computing services - such as virtual machines, storage, databases, and networking - over the internet, so you aren't constrained by physical infrastructure.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-compute/3-what-cloud-compute"
+    },
+    {
+      "id": "c2",
+      "section": "cloud-computing",
+      "sectionTitle": "Describe cloud computing",
+      "type": "multi",
+      "difficulty": "medium",
+      "text": "Under the shared responsibility model, which items are ALWAYS the customer's responsibility, regardless of the cloud service type? (Select all that apply.)",
+      "choices": [
+        { "id": "a", "text": "The information and data stored in the cloud" },
+        { "id": "b", "text": "The accounts and identities of users, services, and devices" },
+        { "id": "c", "text": "The devices that are allowed to connect to your cloud" },
+        { "id": "d", "text": "The physical datacenter, network, and hosts" }
+      ],
+      "correct": ["a", "b", "c"],
+      "explanation": "The consumer is always responsible for their data, their identities/accounts, and the devices that connect. The physical datacenter, network, and hosts are always the provider's responsibility.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-compute/4-describe-shared-responsibility-model"
+    },
+    {
+      "id": "c3",
+      "section": "cloud-computing",
+      "sectionTitle": "Describe cloud computing",
+      "type": "multi",
+      "difficulty": "medium",
+      "text": "Which items are ALWAYS the cloud provider's responsibility under the shared responsibility model? (Select all that apply.)",
+      "choices": [
+        { "id": "a", "text": "The physical datacenter" },
+        { "id": "b", "text": "The physical network" },
+        { "id": "c", "text": "The physical hosts" },
+        { "id": "d", "text": "The data stored in the cloud" },
+        { "id": "e", "text": "User accounts and identities" }
+      ],
+      "correct": ["a", "b", "c"],
+      "explanation": "The cloud provider always owns the physical datacenter, physical network, and physical hosts. Data, devices, and identities always remain the customer's responsibility.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-compute/4-describe-shared-responsibility-model"
+    },
+    {
+      "id": "c4",
+      "section": "cloud-computing",
+      "sectionTitle": "Describe cloud computing",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "Which cloud service type places the MOST responsibility on the consumer?",
+      "choices": [
+        { "id": "a", "text": "Infrastructure as a service (IaaS)" },
+        { "id": "b", "text": "Platform as a service (PaaS)" },
+        { "id": "c", "text": "Software as a service (SaaS)" },
+        { "id": "d", "text": "All types share responsibility equally" }
+      ],
+      "correct": ["a"],
+      "explanation": "IaaS places the most responsibility on the consumer; the provider only handles physical security, power, and connectivity. SaaS places the most responsibility on the provider.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-compute/4-describe-shared-responsibility-model"
+    },
+    {
+      "id": "c5",
+      "section": "cloud-computing",
+      "sectionTitle": "Describe cloud computing",
+      "type": "single",
+      "difficulty": "easy",
+      "text": "A cloud that is built, controlled, and maintained by a third-party provider and available to anyone who wants to purchase services is a:",
+      "choices": [
+        { "id": "a", "text": "Public cloud" },
+        { "id": "b", "text": "Private cloud" },
+        { "id": "c", "text": "Hybrid cloud" },
+        { "id": "d", "text": "Multicloud" }
+      ],
+      "correct": ["a"],
+      "explanation": "A public cloud is built, controlled, and maintained by a third-party provider; general public availability is the key difference from a private cloud.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-compute/5-define-cloud-models"
+    },
+    {
+      "id": "c6",
+      "section": "cloud-computing",
+      "sectionTitle": "Describe cloud computing",
+      "type": "single",
+      "difficulty": "easy",
+      "text": "A cloud environment used by a single entity, offering greater control at greater cost, is a:",
+      "choices": [
+        { "id": "a", "text": "Private cloud" },
+        { "id": "b", "text": "Public cloud" },
+        { "id": "c", "text": "Hybrid cloud" },
+        { "id": "d", "text": "Multicloud" }
+      ],
+      "correct": ["a"],
+      "explanation": "A private cloud is used by a single organization, providing greater control for the IT team but at greater cost and with fewer public-cloud benefits.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-compute/5-define-cloud-models"
+    },
+    {
+      "id": "c7",
+      "section": "cloud-computing",
+      "sectionTitle": "Describe cloud computing",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "Which cloud model interconnects public and private clouds, letting a private cloud 'surge' into public resources during temporary demand?",
+      "choices": [
+        { "id": "a", "text": "Hybrid cloud" },
+        { "id": "b", "text": "Public cloud" },
+        { "id": "c", "text": "Private cloud" },
+        { "id": "d", "text": "Community cloud" }
+      ],
+      "correct": ["a"],
+      "explanation": "A hybrid cloud uses both public and private clouds together, so a private cloud can surge into public cloud resources for temporary increased demand.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-compute/5-define-cloud-models"
+    },
+    {
+      "id": "c8",
+      "section": "cloud-computing",
+      "sectionTitle": "Describe cloud computing",
+      "type": "truefalse",
+      "difficulty": "medium",
+      "text": "True or False: In a multicloud scenario, an organization uses two or more public cloud providers.",
+      "choices": [
+        { "id": "a", "text": "True" },
+        { "id": "b", "text": "False" }
+      ],
+      "correct": ["a"],
+      "explanation": "Multicloud means using multiple public cloud providers - for example, using different features from each, or migrating from one provider to another.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-compute/5-define-cloud-models"
+    },
+    {
+      "id": "c9",
+      "section": "cloud-computing",
+      "sectionTitle": "Describe cloud computing",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "Because you pay for cloud services only as you consume them, cloud spending is classified as which type of expense?",
+      "choices": [
+        { "id": "a", "text": "Operational expenditure (OpEx)" },
+        { "id": "b", "text": "Capital expenditure (CapEx)" },
+        { "id": "c", "text": "Fixed asset depreciation" },
+        { "id": "d", "text": "Up-front capital investment" }
+      ],
+      "correct": ["a"],
+      "explanation": "The consumption-based model bills you as you use services, making cloud an operational expense (OpEx), unlike CapEx up-front spending on physical infrastructure.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-compute/6-describe-consumption-based-model"
+    },
+    {
+      "id": "c10",
+      "section": "cloud-computing",
+      "sectionTitle": "Describe cloud computing",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "Which set of technologies helps you manage servers and resources across on-premises, hybrid, and multicloud environments from Azure?",
+      "choices": [
+        { "id": "a", "text": "Azure Arc" },
+        { "id": "b", "text": "Azure VMware Solution" },
+        { "id": "c", "text": "Azure Pricing Calculator" },
+        { "id": "d", "text": "Azure Fundamentals" }
+      ],
+      "correct": ["a"],
+      "explanation": "Azure Arc is a set of technologies that helps manage your environment whether it's public cloud on Azure, a private datacenter, hybrid, or multicloud.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-compute/5-define-cloud-models"
+    },
+    {
+      "id": "s1",
+      "section": "service-types",
+      "sectionTitle": "Describe cloud service types",
+      "type": "single",
+      "difficulty": "easy",
+      "text": "Which cloud service type is the MOST flexible and gives the consumer the maximum amount of control?",
+      "choices": [
+        { "id": "a", "text": "Infrastructure as a service (IaaS)" },
+        { "id": "b", "text": "Platform as a service (PaaS)" },
+        { "id": "c", "text": "Software as a service (SaaS)" },
+        { "id": "d", "text": "Function as a service (FaaS)" }
+      ],
+      "correct": ["a"],
+      "explanation": "IaaS is the most flexible category and provides the maximum control; you're essentially renting the hardware and manage everything above it.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-service-types/2-describe-infrastructure-service"
+    },
+    {
+      "id": "s2",
+      "section": "service-types",
+      "sectionTitle": "Describe cloud service types",
+      "type": "multi",
+      "difficulty": "medium",
+      "text": "In an IaaS model, which responsibilities belong to the customer? (Select all that apply.)",
+      "choices": [
+        { "id": "a", "text": "Operating system installation, configuration, and maintenance" },
+        { "id": "b", "text": "Network configuration" },
+        { "id": "c", "text": "Database and storage configuration" },
+        { "id": "d", "text": "Physical security of the datacenter" },
+        { "id": "e", "text": "Internet connectivity to the datacenter" }
+      ],
+      "correct": ["a", "b", "c"],
+      "explanation": "With IaaS the provider maintains the hardware, network connectivity, and physical security; you handle the OS, network configuration, and database/storage configuration.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-service-types/2-describe-infrastructure-service"
+    },
+    {
+      "id": "s3",
+      "section": "service-types",
+      "sectionTitle": "Describe cloud service types",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "Which cloud service type is a 'middle ground' where the provider also maintains the operating systems, middleware, and development tools?",
+      "choices": [
+        { "id": "a", "text": "Platform as a service (PaaS)" },
+        { "id": "b", "text": "Infrastructure as a service (IaaS)" },
+        { "id": "c", "text": "Software as a service (SaaS)" },
+        { "id": "d", "text": "Desktop as a service (DaaS)" }
+      ],
+      "correct": ["a"],
+      "explanation": "PaaS sits between IaaS and SaaS. The provider maintains infrastructure plus OS, middleware, and dev tools, so you focus on your application.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-service-types/3-describe-platform-service"
+    },
+    {
+      "id": "s4",
+      "section": "service-types",
+      "sectionTitle": "Describe cloud service types",
+      "type": "truefalse",
+      "difficulty": "medium",
+      "text": "True or False: In a PaaS environment, the customer must handle licensing and patching for operating systems and databases.",
+      "choices": [
+        { "id": "a", "text": "True" },
+        { "id": "b", "text": "False" }
+      ],
+      "correct": ["b"],
+      "explanation": "False. In PaaS you don't worry about licensing or patching for operating systems and databases - the provider maintains them. You focus on your application and data.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-service-types/3-describe-platform-service"
+    },
+    {
+      "id": "s5",
+      "section": "service-types",
+      "sectionTitle": "Describe cloud service types",
+      "type": "single",
+      "difficulty": "easy",
+      "text": "Renting and using a fully developed application such as email or messaging software is an example of:",
+      "choices": [
+        { "id": "a", "text": "Software as a service (SaaS)" },
+        { "id": "b", "text": "Platform as a service (PaaS)" },
+        { "id": "c", "text": "Infrastructure as a service (IaaS)" },
+        { "id": "d", "text": "Containers as a service (CaaS)" }
+      ],
+      "correct": ["a"],
+      "explanation": "SaaS is the most complete model - you use a fully developed application. Email, messaging, and financial software are common SaaS examples.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-service-types/4-describe-software-service"
+    },
+    {
+      "id": "s6",
+      "section": "service-types",
+      "sectionTitle": "Describe cloud service types",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "Which cloud service type has the LOWEST operational overhead for the customer and is the easiest to get up and running?",
+      "choices": [
+        { "id": "a", "text": "Software as a service (SaaS)" },
+        { "id": "b", "text": "Platform as a service (PaaS)" },
+        { "id": "c", "text": "Infrastructure as a service (IaaS)" },
+        { "id": "d", "text": "They are all equal" }
+      ],
+      "correct": ["a"],
+      "explanation": "In SaaS the provider manages almost the entire stack, so the customer mainly manages data, identity/access, and device access - the lowest operational overhead and easiest to run.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-service-types/4-describe-software-service"
+    },
+    {
+      "id": "s7",
+      "section": "service-types",
+      "sectionTitle": "Describe cloud service types",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "A team wants to 'lift and shift' its on-premises servers to the cloud with full control over the operating system. Which service type is the best fit?",
+      "choices": [
+        { "id": "a", "text": "Infrastructure as a service (IaaS)" },
+        { "id": "b", "text": "Platform as a service (PaaS)" },
+        { "id": "c", "text": "Software as a service (SaaS)" },
+        { "id": "d", "text": "Serverless" }
+      ],
+      "correct": ["a"],
+      "explanation": "Lift-and-shift migration is a common IaaS scenario: you replicate your on-premises datacenter configuration in the cloud and move workloads while keeping full control.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-service-types/2-describe-infrastructure-service"
+    },
+    {
+      "id": "s8",
+      "section": "service-types",
+      "sectionTitle": "Describe cloud service types",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "A development framework with built-in scalability plus analytics/business-intelligence tooling delivered as a service are common scenarios for which service type?",
+      "choices": [
+        { "id": "a", "text": "Platform as a service (PaaS)" },
+        { "id": "b", "text": "Infrastructure as a service (IaaS)" },
+        { "id": "c", "text": "Software as a service (SaaS)" },
+        { "id": "d", "text": "On-premises" }
+      ],
+      "correct": ["a"],
+      "explanation": "PaaS scenarios include providing a development framework (with built-in scalability, high availability, and multitenancy) and analytics/BI tools delivered as a service.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-cloud-service-types/3-describe-platform-service"
+    },
+    {
+      "id": "b1",
+      "section": "benefits",
+      "sectionTitle": "Describe the benefits of using cloud services",
+      "type": "single",
+      "difficulty": "easy",
+      "text": "In the cloud, what does 'scalability' refer to?",
+      "choices": [
+        { "id": "a", "text": "The ability to adjust resources to meet demand" },
+        { "id": "b", "text": "The ability of a system to recover from failures" },
+        { "id": "c", "text": "The guaranteed uptime of a service" },
+        { "id": "d", "text": "The physical size of the datacenter" }
+      ],
+      "correct": ["a"],
+      "explanation": "Scalability is the ability to adjust resources to meet demand - adding resources at peak and reducing them when demand drops, so you don't overpay.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-benefits-use-cloud-services/2-high-availability-scalability-cloud"
+    },
+    {
+      "id": "b2",
+      "section": "benefits",
+      "sectionTitle": "Describe the benefits of using cloud services",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "Adding more CPU or RAM to an existing virtual machine is an example of:",
+      "choices": [
+        { "id": "a", "text": "Vertical scaling" },
+        { "id": "b", "text": "Horizontal scaling" },
+        { "id": "c", "text": "Load balancing" },
+        { "id": "d", "text": "Failover" }
+      ],
+      "correct": ["a"],
+      "explanation": "Vertical scaling increases or decreases the capabilities of a resource (for example, adding CPU or RAM to a VM). Horizontal scaling adds or removes the number of resources.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-benefits-use-cloud-services/2-high-availability-scalability-cloud"
+    },
+    {
+      "id": "b3",
+      "section": "benefits",
+      "sectionTitle": "Describe the benefits of using cloud services",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "Adding more virtual machine instances to handle a spike in demand is an example of:",
+      "choices": [
+        { "id": "a", "text": "Horizontal scaling" },
+        { "id": "b", "text": "Vertical scaling" },
+        { "id": "c", "text": "Scaling up" },
+        { "id": "d", "text": "High availability" }
+      ],
+      "correct": ["a"],
+      "explanation": "Horizontal scaling adds (scales out) or subtracts (scales in) the number of resources, such as adding VMs or containers to meet demand.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-benefits-use-cloud-services/2-high-availability-scalability-cloud"
+    },
+    {
+      "id": "b4",
+      "section": "benefits",
+      "sectionTitle": "Describe the benefits of using cloud services",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "Which benefit is defined as the ability of a system to recover from failures and continue to function, and is a pillar of the Azure Well-Architected Framework?",
+      "choices": [
+        { "id": "a", "text": "Reliability" },
+        { "id": "b", "text": "Scalability" },
+        { "id": "c", "text": "Predictability" },
+        { "id": "d", "text": "Manageability" }
+      ],
+      "correct": ["a"],
+      "explanation": "Reliability is the ability of a system to recover from failures and continue to function; the cloud's decentralized, global design supports it, and it's a Well-Architected Framework pillar.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-benefits-use-cloud-services/3-reliability-predictability-cloud"
+    },
+    {
+      "id": "b5",
+      "section": "benefits",
+      "sectionTitle": "Describe the benefits of using cloud services",
+      "type": "single",
+      "difficulty": "easy",
+      "text": "Azure uptime guarantees that define how available a service will be are documented in:",
+      "choices": [
+        { "id": "a", "text": "Service-level agreements (SLAs)" },
+        { "id": "b", "text": "Capital expenditure reports" },
+        { "id": "c", "text": "The shared responsibility model" },
+        { "id": "d", "text": "Azure Arc policies" }
+      ],
+      "correct": ["a"],
+      "explanation": "High availability focuses on maximum uptime. Azure's uptime guarantees vary by service and are defined in service-level agreements (SLAs).",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-benefits-use-cloud-services/2-high-availability-scalability-cloud"
+    },
+    {
+      "id": "b6",
+      "section": "benefits",
+      "sectionTitle": "Describe the benefits of using cloud services",
+      "type": "multi",
+      "difficulty": "medium",
+      "text": "Predictability in the cloud can focus on which two areas? (Select two.)",
+      "choices": [
+        { "id": "a", "text": "Performance predictability" },
+        { "id": "b", "text": "Cost predictability" },
+        { "id": "c", "text": "Security predictability" },
+        { "id": "d", "text": "Identity predictability" }
+      ],
+      "correct": ["a", "b"],
+      "explanation": "Predictability covers performance (autoscaling, load balancing, high availability) and cost (real-time tracking, forecasting, and tools like the Azure Pricing Calculator).",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-benefits-use-cloud-services/3-reliability-predictability-cloud"
+    },
+    {
+      "id": "b7",
+      "section": "benefits",
+      "sectionTitle": "Describe the benefits of using cloud services",
+      "type": "multi",
+      "difficulty": "medium",
+      "text": "'Management in the cloud' describes how you manage your environment. Which are valid methods? (Select all that apply.)",
+      "choices": [
+        { "id": "a", "text": "A web portal" },
+        { "id": "b", "text": "A command-line interface (CLI)" },
+        { "id": "c", "text": "APIs" },
+        { "id": "d", "text": "PowerShell" },
+        { "id": "e", "text": "Physically visiting the datacenter" }
+      ],
+      "correct": ["a", "b", "c", "d"],
+      "explanation": "You can manage your cloud environment through a web portal, a command-line interface, APIs, and PowerShell. Physical datacenter access is the provider's domain.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-benefits-use-cloud-services/5-manageability-cloud"
+    },
+    {
+      "id": "b8",
+      "section": "benefits",
+      "sectionTitle": "Describe the benefits of using cloud services",
+      "type": "single",
+      "difficulty": "medium",
+      "text": "Automatically shutting down a development environment overnight and on weekends primarily supports which cloud consideration?",
+      "choices": [
+        { "id": "a", "text": "Sustainability" },
+        { "id": "b", "text": "High availability" },
+        { "id": "c", "text": "Reliability" },
+        { "id": "d", "text": "Horizontal scaling" }
+      ],
+      "correct": ["a"],
+      "explanation": "Turning off or deallocating resources that aren't in use - like dev environments outside business hours - reduces unnecessary consumption, supporting sustainability and cost efficiency.",
+      "source": "https://learn.microsoft.com/en-us/training/modules/describe-benefits-use-cloud-services/5a-describe-sustainability-cloud"
+    }
+  ]
+}

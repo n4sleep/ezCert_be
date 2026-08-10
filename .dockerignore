@@ -1,0 +1,6 @@
+bin/
+obj/
+*.log
+**/bin/
+**/obj/
+crawl/

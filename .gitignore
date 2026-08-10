@@ -1,6 +1,10 @@
 # dependencies
 node_modules/
 
+# build outputs
+bin/
+obj/
+
 # crawl artifacts (regenerable)
 crawl/out/
 crawl/azure-fundamentals-cloud-concepts.md
@@ -10,3 +14,6 @@ crawl/azure-fundamentals-cloud-concepts.md
 .idea/
 .DS_Store
 Thumbs.db
+
+# logs / local
+*.log
