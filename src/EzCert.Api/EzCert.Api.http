@@ -1,6 +1,0 @@
-@EzCert.Api_HostAddress = http://localhost:5160
-
-GET {{EzCert.Api_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
