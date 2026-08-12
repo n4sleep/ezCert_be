@@ -1,0 +1,21 @@
+{
+  "name": "ezcert-crawler",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ezCert crawler - URL to clean documents (Firecrawl v1 / Crawlee fallback)",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.19.0",
+    "firecrawl": "^4.32.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  }
+}

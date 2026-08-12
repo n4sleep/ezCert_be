@@ -3,18 +3,13 @@ services:
     image: postgres:16-alpine
     container_name: ezcert-postgres
     environment:
+      POSTGRES_DB: ezcert
       POSTGRES_USER: ezcert
       POSTGRES_PASSWORD: ezcert
-      POSTGRES_DB: ezcert
     ports:
       - "5432:5432"
     volumes:
-      - ezcert-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ezcert -d ezcert"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+      - postgres-data:/var/lib/postgresql/data
 
   qdrant:
     image: qdrant/qdrant:v1.12.4
@@ -23,8 +18,8 @@ services:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - ezcert-qdrant:/qdrant/storage
+      - qdrant-data:/qdrant/storage
 
 volumes:
-  ezcert-pgdata:
-  ezcert-qdrant:
+  postgres-data:
+  qdrant-data:
