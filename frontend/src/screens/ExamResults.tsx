@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { request } from "../api/client";
 import type { AttemptResult } from "../types";
+import { useToasts } from "../components/Toast";
 
 interface Props {
   attemptId: string;
@@ -10,12 +11,16 @@ interface Props {
 export default function ExamResults({ attemptId, onBack }: Props) {
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [error, setError] = useState("");
+  const { push } = useToasts();
 
   useEffect(() => {
     request<AttemptResult>(`/api/attempts/${attemptId}/results`)
-      .then(setResult)
+      .then((r) => {
+        setResult(r);
+        push("success", "Results saved to this browser's history");
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load results"));
-  }, [attemptId]);
+  }, [attemptId, push]);
 
   if (error)
     return (

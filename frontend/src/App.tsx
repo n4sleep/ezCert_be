@@ -26,15 +26,33 @@ export default function App() {
     if (examId && phase === "chat") setPhase("exam");
   }, [examId, phase]);
 
+  function goChat() {
+    setPhase("chat");
+  }
+  function goExam() {
+    if (examId) setPhase("exam");
+  }
+  function goReview() {
+    if (attemptId) setPhase("review");
+  }
+
   return (
-    <AppShell active={phase}>
+    <AppShell
+      active={phase}
+      onChat={goChat}
+      onExam={examId ? goExam : undefined}
+      onReview={attemptId ? goReview : undefined}
+    >
       {linkError && (
         <div className="max-w-4xl mx-auto p-xl">
           <div className="bg-danger-soft text-danger p-lg rounded-xl">{linkError}</div>
         </div>
       )}
       {phase === "chat" && (
-        <ExamBuilder onStartExam={(id) => { setExamId(id); setPhase("exam"); }} />
+        <ExamBuilder
+          onStartExam={(id) => { setExamId(id); setPhase("exam"); }}
+          onOpenExam={(id) => { setExamId(id); setPhase("exam"); }}
+        />
       )}
       {phase === "exam" && examId && (
         <ExamTaking
@@ -43,7 +61,7 @@ export default function App() {
         />
       )}
       {phase === "review" && attemptId && (
-        <ExamResults attemptId={attemptId} onBack={() => { setPhase("chat"); setExamId(null); }} />
+        <ExamResults attemptId={attemptId} onBack={() => { setPhase("chat"); }} />
       )}
     </AppShell>
   );

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { request } from "../api/client";
 import type { AnswerResult, AttemptDto } from "../types";
+import { useToasts } from "../components/Toast";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 interface Props {
   examId: string;
@@ -13,6 +15,10 @@ export default function ExamTaking({ examId, onFinished }: Props) {
   const [selected, setSelected] = useState<string[]>([]);
   const [revealed, setRevealed] = useState<Record<string, AnswerResult>>({});
   const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const { push } = useToasts();
 
   useEffect(() => {
     request<AttemptDto>(`/api/exams/${examId}/attempts`, { method: "POST" })
@@ -35,12 +41,19 @@ export default function ExamTaking({ examId, onFinished }: Props) {
   }
 
   async function check() {
-    if (!current) return;
-    const res = await request<AnswerResult>(`/api/attempts/${attempt!.attemptId}/answers`, {
-      method: "POST",
-      body: { attemptQuestionId: current.attemptQuestionId, selected },
-    });
-    setRevealed((r) => ({ ...r, [current.attemptQuestionId]: res }));
+    if (!current || checking) return;
+    setChecking(true);
+    try {
+      const res = await request<AnswerResult>(`/api/attempts/${attempt!.attemptId}/answers`, {
+        method: "POST",
+        body: { attemptQuestionId: current.attemptQuestionId, selected },
+      });
+      setRevealed((r) => ({ ...r, [current.attemptQuestionId]: res }));
+    } catch (e) {
+      push("error", e instanceof Error ? e.message : "Couldn't check the answer");
+    } finally {
+      setChecking(false);
+    }
   }
 
   function next() {
@@ -48,10 +61,23 @@ export default function ExamTaking({ examId, onFinished }: Props) {
     setIndex((i) => i + 1);
   }
 
-  async function submit() {
-    if (!attempt) return;
-    const res = await request<{ attemptId: string }>(`/api/attempts/${attempt.attemptId}/submit`, { method: "POST" });
-    onFinished(res.attemptId);
+  function previous() {
+    setSelected([]);
+    setIndex((i) => Math.max(0, i - 1));
+  }
+
+  async function doSubmit() {
+    if (!attempt || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await request<{ attemptId: string }>(`/api/attempts/${attempt.attemptId}/submit`, { method: "POST" });
+      push("success", "Exam submitted");
+      onFinished(res.attemptId);
+    } catch (e) {
+      push("error", e instanceof Error ? e.message : "Submit failed — your attempt is still in progress");
+      setSubmitting(false);
+      setConfirmSubmit(false);
+    }
   }
 
   if (error)
@@ -130,7 +156,14 @@ export default function ExamTaking({ examId, onFinished }: Props) {
               }
 
               return (
-                <button key={c.label} className={cls} onClick={() => toggle(c.label)} disabled={!!rev}>
+                <button
+                  key={c.label}
+                  className={cls}
+                  onClick={() => toggle(c.label)}
+                  disabled={!!rev}
+                  aria-pressed={picked}
+                  title={rev ? "Locked after checking" : undefined}
+                >
                   <div className={labelCls}>{c.label}</div>
                   <span className={"font-body-lg flex-grow " + (picked ? "font-semibold" : "")}>{c.text}</span>
                   {picked && !rev && <span className="text-primary">●</span>}
@@ -162,21 +195,29 @@ export default function ExamTaking({ examId, onFinished }: Props) {
       <div className="mt-auto pt-xl flex flex-col sm:flex-row justify-between items-center gap-md max-w-4xl mx-auto w-full pb-xl">
         <div className="flex gap-md w-full sm:w-auto justify-between sm:justify-start">
           <button
-            className="flex items-center justify-center px-lg py-md rounded-lg font-label-md text-secondary hover:text-primary min-w-[120px]"
-            onClick={() => { setSelected([]); setIndex((i) => Math.max(0, i - 1)); }}
+            className="flex items-center justify-center px-lg py-md rounded-lg font-label-md text-secondary hover:text-primary min-w-[120px] disabled:opacity-40 disabled:hover:text-secondary"
+            onClick={previous}
             disabled={index === 0}
           >
             ← Previous
           </button>
           {!rev && (
-            <button className="flex items-center justify-center px-lg py-md rounded-lg bg-surface-container-high font-label-md text-on-surface min-w-[120px]" onClick={check} disabled={selected.length === 0}>
-              Check answer
+            <button
+              className="flex items-center justify-center px-lg py-md rounded-lg bg-surface-container-high font-label-md text-on-surface min-w-[120px] disabled:opacity-50"
+              onClick={check}
+              disabled={selected.length === 0 || checking}
+              aria-busy={checking}
+            >
+              {checking ? "Checking…" : "Check answer"}
             </button>
           )}
         </div>
         {rev &&
           (isLast ? (
-            <button className="w-full sm:w-auto flex items-center justify-center px-xl py-md rounded-lg bg-success text-white font-label-md shadow-md hover:bg-[#059669] transition-all" onClick={submit}>
+            <button
+              className="w-full sm:w-auto flex items-center justify-center px-xl py-md rounded-lg bg-success text-white font-label-md shadow-md hover:bg-[#059669] transition-all"
+              onClick={() => setConfirmSubmit(true)}
+            >
               Submit Exam →
             </button>
           ) : (
@@ -185,6 +226,17 @@ export default function ExamTaking({ examId, onFinished }: Props) {
             </button>
           ))}
       </div>
+
+      {confirmSubmit && (
+        <ConfirmDialog
+          title="Submit exam?"
+          body="You can't change your answers after submitting. Your score will be saved to this browser's history."
+          confirmLabel="Submit"
+          busy={submitting}
+          onConfirm={doSubmit}
+          onCancel={() => setConfirmSubmit(false)}
+        />
+      )}
     </div>
   );
 }
