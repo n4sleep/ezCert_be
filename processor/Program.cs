@@ -11,7 +11,22 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? "Host=localhost;Port=5432;Database=ezcert;Username=ezcert;Password=ezcert";
 
-builder.Services.AddDbContext<EzCertDbContext>(opt => opt.UseNpgsql(connectionString));
+// Database provider: "sqlite" (hosted/App Runner, ephemeral) or "postgres" (local dev).
+var dbProvider = builder.Configuration["Database:Provider"] ?? "postgres";
+
+builder.Services.AddDbContext<EzCertDbContext>(opt =>
+{
+    if (dbProvider == "sqlite")
+    {
+        var sqlitePath = builder.Configuration["Database:SqlitePath"] ?? "/data/ezcert.db";
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(sqlitePath))!);
+        opt.UseSqlite($"Data Source={sqlitePath}");
+    }
+    else
+    {
+        opt.UseNpgsql(connectionString);
+    }
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -31,11 +46,17 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<EzCertDbContext>();
-    try { await db.Database.MigrateAsync(); }
+    try
+    {
+        if (dbProvider == "sqlite")
+            await db.Database.EnsureCreatedAsync(); // SQLite: schema from the model (no migration set)
+        else
+            await db.Database.MigrateAsync();       // Postgres: EF migrations
+    }
     catch (Exception ex)
     {
         var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        log.LogError(ex, "Startup migrate failed; API up but data endpoints need the DB");
+        log.LogError(ex, "Startup database init failed; API up but data endpoints need the DB");
     }
 }
 
