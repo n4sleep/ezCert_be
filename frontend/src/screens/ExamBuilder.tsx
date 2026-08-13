@@ -20,6 +20,24 @@ export default function ExamBuilder({ onStartExam }: Props) {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
+  const [shareFor, setShareFor] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState("");
+  const [shareCopied, setShareCopied] = useState(false);
+
+  async function share(examId: string) {
+    try {
+      const res = await request<{ shareToken: string; url: string }>(`/api/exams/${examId}/share`, { method: "POST" });
+      setShareUrl(res.url);
+      setShareCopied(false);
+      setShareFor(examId);
+    } catch (e) {
+      setFeed((f) => [...f, { id: nextId++, kind: "error", text: e instanceof Error ? e.message : "Share failed." }]);
+    }
+  }
+
+  function copyLink() {
+    void navigator.clipboard?.writeText(shareUrl).then(() => setShareCopied(true));
+  }
 
   async function submit() {
     const text = prompt.trim();
@@ -162,13 +180,21 @@ export default function ExamBuilder({ onStartExam }: Props) {
                         </div>
                       </div>
                       <p className="text-[12px] text-on-surface-variant/70 mb-lg">Available for 3 days · expires soon</p>
-                      <button
-                        className="w-full bg-primary text-on-primary font-label-md py-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(53,37,205,0.2)] hover:-translate-y-1 transition-transform duration-300"
-                        onClick={() => onStartExam(item.examId!)}
-                      >
-                        <span className="font-bold tracking-wide">Start exam</span>
-                        <span>→</span>
-                      </button>
+                      <div className="flex gap-md">
+                        <button
+                          className="flex-1 bg-primary text-on-primary font-label-md py-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(53,37,205,0.2)] hover:-translate-y-1 transition-transform duration-300"
+                          onClick={() => onStartExam(item.examId!)}
+                        >
+                          <span className="font-bold tracking-wide">Start exam</span>
+                          <span>→</span>
+                        </button>
+                        <button
+                          className="px-4 py-4 rounded-xl bg-surface-container text-primary font-label-md hover:bg-surface-variant transition-colors"
+                          onClick={() => share(item.examId!)}
+                        >
+                          Share link
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -213,6 +239,29 @@ export default function ExamBuilder({ onStartExam }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Share dialog */}
+      {shareFor && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4" onClick={() => setShareFor(null)}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-xl max-w-md w-full p-lg" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-headline-md text-headline-md mb-sm">Share this exam</h3>
+            <p className="text-body-sm text-on-surface-variant mb-md">
+              Anyone with this link can take the exam while it is available (3 days). Share it however you like.
+            </p>
+            <div className="flex gap-md items-center bg-surface rounded-xl border border-outline-variant p-md">
+              <input readOnly value={shareUrl} className="flex-1 bg-transparent outline-none text-body-sm text-on-surface" />
+              <button className="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md shrink-0" onClick={copyLink}>
+                {shareCopied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <div className="flex justify-end mt-md">
+              <button className="px-md py-sm rounded-lg text-on-surface-variant font-label-md" onClick={() => setShareFor(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

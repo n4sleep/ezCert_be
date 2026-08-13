@@ -1,4 +1,5 @@
 using EzCert.Processor.Features.Attempts;
+using EzCert.Processor.Features.Exams;
 using EzCert.Processor.Features.Generation;
 using EzCert.Processor.Features.Guests;
 using EzCert.Processor.Infrastructure.Postgres;
@@ -47,5 +48,6 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ezcert-pr
 
 app.MapGenerationEndpoints();
 app.MapAttemptEndpoints();
+app.MapExamShareEndpoints();
 
 app.Run();
