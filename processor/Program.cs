@@ -1,4 +1,5 @@
 using EzCert.Processor.Features.Attempts;
+using EzCert.Processor.Features.Diagnostics;
 using EzCert.Processor.Features.Exams;
 using EzCert.Processor.Features.Generation;
 using EzCert.Processor.Features.Guests;
@@ -90,5 +91,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ezcert-pr
 app.MapGenerationEndpoints();
 app.MapAttemptEndpoints();
 app.MapExamShareEndpoints();
+
+// Diagnostics endpoints only when explicitly enabled (Diagnostics:Enabled=true).
+if (bool.TryParse(builder.Configuration["Diagnostics:Enabled"], out var diagEnabled) && diagEnabled)
+    app.MapDiagnosticsEndpoints();
 
 app.Run();
