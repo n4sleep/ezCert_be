@@ -47,10 +47,11 @@ public static class ExamShareEndpoints
             exam.ShareToken ??= Guid.NewGuid().ToString("N");
             await db.SaveChangesAsync();
 
-            var baseUrl = ctx.Request.Scheme == "https"
-                ? $"{ctx.Request.Scheme}://{ctx.Request.Host}"
-                : "http://localhost:5173";
-            return Results.Ok(new { shareToken = exam.ShareToken, url = $"{baseUrl}/?take={exam.ShareToken}" });
+            // The public SPA origin comes from config — the request host is the API
+            // (App Runner terminates TLS, so Request.Scheme is unreliable here).
+            var config = ctx.RequestServices.GetRequiredService<IConfiguration>();
+            var siteUrl = config["PublicSiteUrl"] ?? "http://localhost:5173";
+            return Results.Ok(new { shareToken = exam.ShareToken, url = $"{siteUrl.TrimEnd('/')}/?take={exam.ShareToken}" });
         });
 
         app.MapGet("/api/exams/take/{shareToken}", async (string shareToken, EzCertDbContext db, HttpContext ctx) =>
