@@ -9,7 +9,7 @@ public static class GuestIdentity
 {
     public const string CookieName = "guest_device_id";
 
-    public static string GetOrCreateDeviceId(HttpContext ctx)
+    public static string GetOrCreateDeviceId(HttpContext ctx, bool crossSite = false)
     {
         if (ctx.Items.TryGetValue("deviceId", out var cached) && cached is string c)
             return c;
@@ -21,8 +21,13 @@ public static class GuestIdentity
             ctx.Response.Cookies.Append(CookieName, id, new CookieOptions
             {
                 HttpOnly = true,
-                SameSite = SameSiteMode.Lax,
-                Secure = ctx.Request.IsHttps,
+                // Cross-site topology (AD-15): SPA on CloudFront, API on App
+                // Runner. Lax would not be sent on cross-site fetch() calls,
+                // so production uses None+Secure. Local dev is same-origin
+                // through the Vite proxy, where Lax works (and Secure would
+                // break plain http).
+                SameSite = crossSite ? SameSiteMode.None : SameSiteMode.Lax,
+                Secure = crossSite,
                 MaxAge = TimeSpan.FromDays(90),
             });
         }
@@ -33,10 +38,16 @@ public static class GuestIdentity
 
 public static class GuestMiddlewareExtensions
 {
-    public static IApplicationBuilder UseGuestIdentity(this IApplicationBuilder app) => app.Use(async (ctx, next) =>
+    public static IApplicationBuilder UseGuestIdentity(this IApplicationBuilder app)
     {
-        var db = ctx.RequestServices.GetRequiredService<EzCertDbContext>();
-        var id = GuestIdentity.GetOrCreateDeviceId(ctx);
+        var env = app.ApplicationServices.GetRequiredService<IHostEnvironment>();
+        // Production SPA (CloudFront) and API (App Runner) are different
+        // sites, so the guest cookie must survive cross-site requests.
+        var crossSite = !env.IsDevelopment();
+        return app.Use(async (ctx, next) =>
+        {
+            var db = ctx.RequestServices.GetRequiredService<EzCertDbContext>();
+            var id = GuestIdentity.GetOrCreateDeviceId(ctx, crossSite);
 
         var known = await db.GuestDevices.FirstOrDefaultAsync(g => g.DeviceId == id);
         if (known is null)
@@ -51,4 +62,5 @@ public static class GuestMiddlewareExtensions
 
         await next();
     });
+}
 }
