@@ -1,7 +1,9 @@
 // Single API client for the SPA (AD-11: static display layer, server is
 // authoritative). guest_device_id is an HttpOnly cookie set by the processor.
+// Dev: same-origin via the Vite proxy (/api -> :5080), so no CORS.
+// Prod: VITE_API_URL points at the deployed API origin.
 
-export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:5080";
+export const API_BASE_URL: string = import.meta.env.VITE_API_URL ?? "";
 
 export class ApiError extends Error {
   readonly status: number;
