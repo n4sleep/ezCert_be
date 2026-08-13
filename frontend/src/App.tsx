@@ -29,13 +29,12 @@ export default function App() {
     const token = new URLSearchParams(window.location.search).get("take");
     if (!token) return;
     request<{ examId: string; title: string; expiresAt: string }>(`/api/exams/take/${token}`)
-      .then((res) => setExamId(res.examId))
+      .then((res) => {
+        setExamId(res.examId);
+        setPhase("exam");
+      })
       .catch((e) => setLinkError(e instanceof Error ? e.message : "This exam is unavailable."));
   }, [refresh]);
-
-  useEffect(() => {
-    if (examId && phase === "chat") setPhase("exam");
-  }, [examId, phase]);
 
   function startExam(id: string) {
     setExamId(id);
