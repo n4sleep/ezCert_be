@@ -2,6 +2,7 @@ using EzCert.Processor.Features.Attempts;
 using EzCert.Processor.Features.Exams;
 using EzCert.Processor.Features.Generation;
 using EzCert.Processor.Features.Guests;
+using EzCert.Processor.Infrastructure.Bedrock;
 using EzCert.Processor.Infrastructure.Postgres;
 using Microsoft.EntityFrameworkCore;
 using Qdrant.Client;
@@ -40,6 +41,25 @@ var qdrantHost = builder.Configuration["Qdrant:Host"] ?? "localhost";
 var qdrantPort = int.TryParse(builder.Configuration["Qdrant:Port"], out var qp) ? qp : 6333;
 var qdrantHttps = bool.TryParse(builder.Configuration["Qdrant:Https"], out var qh) && qh;
 builder.Services.AddSingleton(new QdrantClient(qdrantHost, qdrantPort, qdrantHttps));
+
+// Bedrock access (AD-14): "gateway" = rich-sandbox HTTP gateway (hosted),
+// "direct" = local Bedrock via SSO credentials (dev).
+var bedrockMode = builder.Configuration["Bedrock:Mode"] ?? "direct";
+var embedModel = builder.Configuration["Bedrock:EmbedModel"] ?? "amazon.titan-embed-text-v2:0";
+var genModel = builder.Configuration["Bedrock:GenModel"] ?? "amazon.nova-micro-v1:0";
+if (bedrockMode == "gateway")
+{
+    var gwUrl = builder.Configuration["BedrockGateway:Url"]
+        ?? throw new InvalidOperationException("BedrockGateway:Url is required when Bedrock:Mode=gateway");
+    var gwSecret = builder.Configuration["BedrockGateway:Secret"]
+        ?? throw new InvalidOperationException("BedrockGateway:Secret is required when Bedrock:Mode=gateway");
+    builder.Services.AddSingleton<IBedrockClient>(new GatewayBedrockClient(gwUrl, gwSecret));
+}
+else
+{
+    var region = builder.Configuration["AWS_REGION"] ?? "us-east-1";
+    builder.Services.AddSingleton<IBedrockClient>(new DirectBedrockClient(embedModel, genModel, region));
+}
 
 var app = builder.Build();
 
