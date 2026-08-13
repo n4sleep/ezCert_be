@@ -58,3 +58,26 @@ export interface AttemptResult {
   sections: SectionScoreDto[];
   review: ReviewItem[];
 }
+
+// Exam list entry (GET /api/exams) — persisted per-device history.
+export interface ExamSummary {
+  examId: string;
+  title: string;
+  mode: string;
+  difficulty: string;
+  status: string;
+  questionCount: number;
+  expiresAt: string;
+  createdAt: string;
+}
+
+// Attempt history entry (GET /api/me/attempts) — newest first.
+export interface AttemptSummary {
+  attemptId: string;
+  examId: string;
+  title: string;
+  status: string;
+  scorePercent: number;
+  passed: boolean;
+  startedAt: string;
+}

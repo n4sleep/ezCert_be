@@ -1,16 +1,16 @@
 // App shell per the Stitch design: fixed top bar (logo left, nav, profile right).
-// Nav tabs are real phase switches (EXPERIENCE.md Component Patterns): Exam and
-// Review render only when an exam/attempt exists; otherwise hidden.
+// Nav tabs (Chat / Exam / Review) are ALWAYS visible destinations
+// (EXPERIENCE.md IA); the Exam/Review screens handle their own empty states.
 interface Props {
   active: "chat" | "exam" | "review";
   onChat: () => void;
-  onExam?: () => void;
-  onReview?: () => void;
+  onExam: () => void;
+  onReview: () => void;
   children: React.ReactNode;
 }
 
 export default function AppShell({ active, onChat, onExam, onReview, children }: Props) {
-  const navLink = (key: string, label: string, onClick?: () => void) => (
+  const navLink = (key: string, label: string, onClick: () => void) => (
     <button
       onClick={onClick}
       className={
@@ -34,8 +34,8 @@ export default function AppShell({ active, onChat, onExam, onReview, children }:
           </button>
           <nav className="hidden md:flex items-center gap-xl h-full">
             {navLink("chat", "Chat", onChat)}
-            {onExam && navLink("exam", "Exam", onExam)}
-            {onReview && navLink("review", "Review", onReview)}
+            {navLink("exam", "Exam", onExam)}
+            {navLink("review", "Review", onReview)}
           </nav>
           <div className="flex items-center gap-md">
             <div className="ml-base border-l border-outline-variant pl-md flex items-center gap-sm">

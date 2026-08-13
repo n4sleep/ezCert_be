@@ -1,11 +1,12 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { request } from "../api/client";
-import type { ExamJobStatus } from "../types";
+import type { ExamJobStatus, ExamSummary } from "../types";
 import { useToasts } from "../components/Toast";
 
 interface Props {
+  exams: ExamSummary[];
   onStartExam: (examId: string) => void;
-  onOpenExam: (examId: string) => void;
+  onGenerated: () => void;
 }
 
 interface FeedItem {
@@ -17,7 +18,7 @@ interface FeedItem {
 
 let nextId = 1;
 
-export default function ExamBuilder({ onStartExam, onOpenExam }: Props) {
+export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -28,6 +29,19 @@ export default function ExamBuilder({ onStartExam, onOpenExam }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const { push } = useToasts();
+  const seeded = useRef(false);
+
+  // ChatGPT-style history: on first mount, render past exams as cards.
+  useEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
+    if (exams.length === 0) return;
+    setFeed((f) => [
+      ...f,
+      { id: nextId++, kind: "bot", text: "Here are your previous exams — start any of them anytime." },
+      ...exams.map((e) => ({ id: nextId++, kind: "exam" as const, examId: e.examId })),
+    ]);
+  }, [exams]);
 
   function newExam() {
     setFeed([]);
@@ -84,6 +98,7 @@ export default function ExamBuilder({ onStartExam, onOpenExam }: Props) {
         setPrompt("");
         setFeed((f) => [...f, { id: nextId++, kind: "exam", examId: job.examId! }]);
         push("success", "Exam generated");
+        onGenerated();
       } else {
         setFeed((f) => [...f, { id: nextId++, kind: "error", text: job.error ?? "Generation failed." }]);
         push("error", "Generation failed — try again");
@@ -123,24 +138,22 @@ export default function ExamBuilder({ onStartExam, onOpenExam }: Props) {
           <h3 className="font-label-caps text-label-caps text-on-surface-variant mb-md uppercase tracking-wider">Recent Exams</h3>
         </div>
         <div className="flex-1 overflow-y-auto px-lg pb-lg space-y-sm">
-          {feed.filter((i) => i.kind === "exam").length === 0 && (
+          {exams.length === 0 && (
             <p className="text-body-sm text-on-surface-variant/70">Your generated exams will appear here.</p>
           )}
-          {feed
-            .filter((i) => i.kind === "exam")
-            .map((i) => (
-              <button
-                key={i.id}
-                className="block w-full text-left p-md rounded-xl bg-surface hover:bg-surface-container transition-colors cursor-pointer"
-                onClick={() => i.examId && onOpenExam(i.examId)}
-              >
-                <div className="flex justify-between items-start mb-xs">
-                  <h4 className="font-label-md text-label-md text-on-surface">AZ-900 Cloud Concepts</h4>
-                  <span className="bg-surface-variant text-on-surface-variant text-[10px] px-2 py-0.5 rounded-full">Ready</span>
-                </div>
-                <p className="font-body-sm text-[12px] text-on-surface-variant">5 Qs • Practice</p>
-              </button>
-            ))}
+          {exams.map((e) => (
+            <button
+              key={e.examId}
+              className="block w-full text-left p-md rounded-xl bg-surface hover:bg-surface-container transition-colors cursor-pointer"
+              onClick={() => onStartExam(e.examId)}
+            >
+              <div className="flex justify-between items-start mb-xs">
+                <h4 className="font-label-md text-label-md text-on-surface">{e.title}</h4>
+                <span className="bg-surface-variant text-on-surface-variant text-[10px] px-2 py-0.5 rounded-full">{e.status}</span>
+              </div>
+              <p className="font-body-sm text-[12px] text-on-surface-variant">{e.questionCount} Qs • {e.mode}</p>
+            </button>
+          ))}
         </div>
       </aside>
 
@@ -194,6 +207,9 @@ export default function ExamBuilder({ onStartExam, onOpenExam }: Props) {
               );
             }
             if (item.kind === "exam" && item.examId) {
+              const summary = exams.find((e) => e.examId === item.examId);
+              const title = summary?.title ?? "Generated exam";
+              const count = summary?.questionCount ?? 5;
               return (
                 <div key={item.id} className="flex w-full justify-start animate-[slideInLeft_0.5s_ease-out]">
                   <div className="flex items-end gap-sm max-w-[90%] md:max-w-[80%]">
@@ -205,10 +221,10 @@ export default function ExamBuilder({ onStartExam, onOpenExam }: Props) {
                         </div>
                       </div>
                       <div className="mb-lg">
-                        <h3 className="font-headline-md text-headline-md text-on-surface mb-2 leading-tight">AZ-900 Cloud Concepts Practice</h3>
+                        <h3 className="font-headline-md text-headline-md text-on-surface mb-2 leading-tight">{title}</h3>
                         <div className="flex flex-wrap gap-4 mt-md">
                           <div className="flex items-center gap-2 text-on-surface-variant bg-surface px-3 py-2 rounded-lg">
-                            <span className="font-label-md text-sm">5 Questions</span>
+                            <span className="font-label-md text-sm">{count} Questions</span>
                           </div>
                           <div className="flex items-center gap-2 text-on-surface-variant bg-surface px-3 py-2 rounded-lg">
                             <span className="font-label-md text-sm">10 Minutes</span>

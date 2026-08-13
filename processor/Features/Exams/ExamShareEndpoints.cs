@@ -11,6 +11,30 @@ public static class ExamShareEndpoints
 {
     public static IEndpointRouteBuilder MapExamShareEndpoints(this IEndpointRouteBuilder app)
     {
+        // List this device's exams (persisted history, newest first) — powers the
+        // Exam tab + ChatGPT-style sidebar.
+        app.MapGet("/api/exams", async (EzCertDbContext db, HttpContext ctx) =>
+        {
+            var device = GuestIdentity.GetOrCreateDeviceId(ctx);
+            var rows = await db.Exams
+                .Where(e => e.OwnerDeviceId == device)
+                .OrderByDescending(e => e.CreatedAt)
+                .Take(100)
+                .Select(e => new
+                {
+                    examId = e.Id,
+                    title = e.Title,
+                    mode = e.Mode,
+                    difficulty = e.Difficulty,
+                    status = e.Status,
+                    questionCount = e.Questions.Count,
+                    expiresAt = e.ExpiresAt,
+                    createdAt = e.CreatedAt,
+                })
+                .ToListAsync();
+            return Results.Ok(rows);
+        });
+
         app.MapPost("/api/exams/{examId:guid}/share", async (Guid examId, EzCertDbContext db, HttpContext ctx) =>
         {
             var device = GuestIdentity.GetOrCreateDeviceId(ctx);
