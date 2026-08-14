@@ -4,8 +4,9 @@ using Amazon.BedrockRuntime;
 using Amazon.BedrockRuntime.Model;
 using Microsoft.AspNetCore.Mvc;
 
-// Bedrock gateway (AD-14): server-to-server only, bearer-secret protected.
-// Runs in the hackathon sandbox with an IAM instance role (bedrock:InvokeModel).
+// Bedrock gateway (AD-14, AD-16): server-to-server only, bearer-secret protected.
+// Runs in the hackathon sandbox as an AWS Lambda + Function URL with an IAM
+// execution role (bedrock:InvokeModel). Local `dotnet run` keeps Kestrel.
 // The processor calls these three endpoints instead of Bedrock directly.
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,6 +18,10 @@ const string GenModel = "amazon.nova-micro-v1:0";
 var secret = builder.Configuration[Secret] ?? throw new InvalidOperationException($"{Secret} env var is required");
 var region = builder.Configuration["AWS_REGION"] ?? "us-east-1";
 var bedrock = new AmazonBedrockRuntimeClient(Amazon.RegionEndpoint.GetBySystemName(region));
+
+// Lambda + Function URL hosting when deployed; Kestrel for local dev.
+if (!string.IsNullOrEmpty(builder.Configuration["AWS_LAMBDA_FUNCTION_NAME"]))
+    builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 var app = builder.Build();
 
