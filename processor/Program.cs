@@ -3,6 +3,7 @@ using EzCert.Processor.Features.Diagnostics;
 using EzCert.Processor.Features.Exams;
 using EzCert.Processor.Features.Generation;
 using EzCert.Processor.Features.Guests;
+using EzCert.Processor.Features.Sources;
 using EzCert.Processor.Infrastructure.Bedrock;
 using EzCert.Processor.Infrastructure.Postgres;
 using Microsoft.EntityFrameworkCore;
@@ -39,9 +40,12 @@ builder.Services.AddCors(o => o.AddPolicy(CorsPolicy, p =>
     p.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 var qdrantHost = builder.Configuration["Qdrant:Host"] ?? "localhost";
-var qdrantPort = int.TryParse(builder.Configuration["Qdrant:Port"], out var qp) ? qp : 6333;
+var qdrantPort = int.TryParse(builder.Configuration["Qdrant:Port"], out var qp) ? qp : 6334;
 var qdrantHttps = bool.TryParse(builder.Configuration["Qdrant:Https"], out var qh) && qh;
-builder.Services.AddSingleton(new QdrantClient(qdrantHost, qdrantPort, qdrantHttps));
+var qdrantKey = builder.Configuration["Qdrant:ApiKey"] ?? "";
+builder.Services.AddSingleton(new QdrantClient(qdrantHost, qdrantPort, qdrantHttps, qdrantKey));
+builder.Services.AddScoped<SeedService>();
+builder.Services.AddScoped<GenerationService>();
 
 // Bedrock access (AD-14): "gateway" = rich-sandbox HTTP gateway (hosted),
 // "direct" = local Bedrock via SSO credentials (dev).
@@ -91,6 +95,39 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ezcert-pr
 app.MapGenerationEndpoints();
 app.MapAttemptEndpoints();
 app.MapExamShareEndpoints();
+
+// POST /api/admin/seed { cert } -> re-seeds official content into Qdrant (AD-6).
+// Demo/dev only: no auth, but harmless (official content is public docs).
+app.MapPost("/api/admin/seed", async (HttpContext ctx, SeedService seed, CancellationToken ct) =>
+{
+    var cert = ctx.Request.Query["cert"].ToString() ?? "az900";
+    var seedDir = Path.Combine(AppContext.BaseDirectory, "seed", "official");
+    var n = await seed.SeedOfficialAsync(cert, seedDir, ct);
+    return Results.Ok(new { cert, chunks = n, namespace_ = $"official:{cert.Trim().ToUpperInvariant().Replace("-", "")}" });
+});
+
+// Seed official content on startup when the collection is empty (idempotent).
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var seed = scope.ServiceProvider.GetRequiredService<SeedService>();
+        var qd = scope.ServiceProvider.GetRequiredService<QdrantClient>();
+        var collections = await qd.ListCollectionsAsync();
+        if (!collections.Contains(SeedService.Collection))
+        {
+            var seedDir = Path.Combine(AppContext.BaseDirectory, "seed", "official");
+            var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            var n = await seed.SeedOfficialAsync("az900", seedDir);
+            log.LogInformation("Startup seed complete: {Count} chunks", n);
+        }
+    }
+    catch (Exception ex)
+    {
+        var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        log.LogWarning(ex, "Startup Qdrant seed skipped (Qdrant unreachable?)");
+    }
+}
 
 // Diagnostics endpoints only when explicitly enabled (Diagnostics:Enabled=true).
 if (bool.TryParse(builder.Configuration["Diagnostics:Enabled"], out var diagEnabled) && diagEnabled)

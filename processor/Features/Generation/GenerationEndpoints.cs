@@ -8,8 +8,9 @@ namespace EzCert.Processor.Features.Generation;
 
 // POST /api/exam-jobs  { prompt, config? } -> jobId   (AD-7: async generation)
 // GET  /api/exam-jobs/{id} -> { status, examId?, error? }
-// For the vertical slice, generation is synchronous-deterministic from the
-// bundled mini bank; the worker/queue + Bedrock wiring lands next.
+// Generation runs through the real pipeline: Qdrant retrieval + Bedrock via
+// the gateway, with validation+retry (<=3). AI failure degrades to a failed
+// job (AD-7: 503-class behavior on the AI path; official bank untouched).
 public static class GenerationEndpoints
 {
     public record CreateJobRequest(string Prompt, string? ConfigJson);
@@ -31,18 +32,40 @@ public static class GenerationEndpoints
             db.ProcessingJobs.Add(job);
             await db.SaveChangesAsync();
 
-            // Vertical-slice generation: build a 5-question exam synchronously
-            // from the bundled mini bank, then mark the job complete.
-            var exam = MiniBank.BuildExam(job.OwnerDeviceId ?? "", req.Prompt);
-            db.Exams.Add(exam);
+            // Inline execution for the demo (job table stays the queue contract
+            // for a later background worker, AD-7).
+            var generation = ctx.RequestServices.GetRequiredService<GenerationService>();
+            job.Status = "running";
+            job.Progress = 0.2;
             await db.SaveChangesAsync();
 
-            job.ExamId = exam.Id;
-            job.Status = "completed";
-            job.Progress = 1;
-            await db.SaveChangesAsync();
+            try
+            {
+                var exam = await generation.GenerateAsync(job.OwnerDeviceId ?? "", req.Prompt, req.ConfigJson, ctx.RequestAborted);
+                if (exam is null)
+                {
+                    job.Status = "failed";
+                    job.Error = "Generation failed after retries — Bedrock is unavailable or returned invalid content. Try again shortly.";
+                    job.Progress = 1;
+                    await db.SaveChangesAsync();
+                    return Results.Accepted($"/api/exam-jobs/{job.Id}", new { jobId = job.Id });
+                }
+                job.ExamId = exam.Id;
+                job.Status = "completed";
+                job.Progress = 1;
+                await db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                var log = ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("GenerationEndpoints");
+                log.LogError(ex, "Exam job {JobId} failed", job.Id);
+                job.Status = "failed";
+                job.Error = "Generation failed — the AI service is unavailable right now. Please try again.";
+                job.Progress = 1;
+                await db.SaveChangesAsync();
+            }
 
-            return Results.Created($"/api/exam-jobs/{job.Id}", new { jobId = job.Id });
+            return Results.Accepted($"/api/exam-jobs/{job.Id}", new { jobId = job.Id });
         });
 
         app.MapGet("/api/exam-jobs/{id:guid}", async (Guid id, EzCertDbContext db, HttpContext ctx) =>
