@@ -17,10 +17,28 @@ export default function App() {
   const [linkError, setLinkError] = useState("");
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [attempts, setAttempts] = useState<AttemptSummary[]>([]);
+  const [apiDown, setApiDown] = useState(false);
+  const [apiNoticeDismissed, setApiNoticeDismissed] = useState(false);
 
   const refresh = useCallback(() => {
     request<ExamSummary[]>("/api/exams").then(setExams).catch(() => {});
     request<AttemptSummary[]>("/api/me/attempts").then(setAttempts).catch(() => {});
+  }, []);
+
+  // Health ping: a dead API must look like "service down", not a fresh install
+  // (the exam/attempt lists fail silently by design).
+  useEffect(() => {
+    let cancelled = false;
+    request<{ status: string }>("/api/health")
+      .then(() => {
+        if (!cancelled) setApiDown(false);
+      })
+      .catch(() => {
+        if (!cancelled) setApiDown(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Load history + resolve shared-exam links on mount.
@@ -53,6 +71,21 @@ export default function App() {
       onExam={() => setPhase("exam")}
       onReview={() => setPhase("review")}
     >
+      {apiDown && !apiNoticeDismissed && (
+        <div className="max-w-container-max mx-auto px-lg pt-lg">
+          <div className="bg-danger-soft text-danger border border-danger/40 rounded-xl px-4 py-3 flex items-start justify-between gap-2">
+            <span>Can't reach the practice server — check your connection and try again.</span>
+            <button
+              type="button"
+              className="opacity-60 hover:opacity-100 text-base leading-none"
+              onClick={() => setApiNoticeDismissed(true)}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
       {linkError && (
         <div className="max-w-4xl mx-auto p-xl">
           <div className="bg-danger-soft text-danger p-lg rounded-xl">{linkError}</div>
@@ -65,24 +98,29 @@ export default function App() {
           onGenerated={refresh}
         />
       )}
-      {phase === "exam" && examId ? (
-        <ExamTaking
-          examId={examId}
-          onFinished={(id) => {
-            setAttemptId(id);
-            refresh();
-            setPhase("review");
-          }}
-        />
-      ) : (
-        <ExamListScreen
-          exams={exams}
-          onStartExam={startExam}
-          onGoChat={() => setPhase("chat")}
-        />
-      )}
+      {phase === "exam" &&
+        (examId ? (
+          <ExamTaking
+            examId={examId}
+            onFinished={(id) => {
+              setAttemptId(id);
+              refresh();
+              setPhase("review");
+            }}
+            onAbandon={() => {
+              setExamId(null);
+              refresh();
+            }}
+          />
+        ) : (
+          <ExamListScreen
+            exams={exams}
+            onStartExam={startExam}
+            onGoChat={() => setPhase("chat")}
+          />
+        ))}
       {phase === "review" && attemptId ? (
-        <ExamResults attemptId={attemptId} onBack={() => setPhase("review")} />
+        <ExamResults attemptId={attemptId} onBack={() => setPhase("chat")} />
       ) : phase === "review" ? (
         <ReviewListScreen
           attempts={attempts}

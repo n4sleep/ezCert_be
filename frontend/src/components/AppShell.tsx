@@ -30,7 +30,7 @@ export default function AppShell({ active, onChat, onExam, onReview, children }:
         <div className="h-20 max-w-container-max mx-auto px-lg lg:px-xxl flex items-center justify-between">
           <button className="flex items-center gap-md cursor-pointer" onClick={onChat} aria-label="Back to chat">
             <div className="w-8 h-8 rounded-lg bg-primary-container text-on-primary grid place-items-center text-lg shadow-sm">◆</div>
-            <span className="font-headline-md text-headline-md text-primary tracking-tight">ezCert</span>
+            <span className="font-headline-md text-headline-md text-primary tracking-tight">ExamGenius</span>
           </button>
           <nav className="hidden md:flex items-center gap-xl h-full">
             {navLink("chat", "Chat", onChat)}

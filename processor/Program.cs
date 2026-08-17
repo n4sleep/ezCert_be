@@ -85,12 +85,19 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.UseSwagger();
-app.UseSwaggerUI();
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 app.UseCors(CorsPolicy);
 app.UseGuestIdentity();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "ezcert-processor" }));
+
+// Same-origin health path through the CloudFront /api/* behavior (DB-free so it
+// stays meaningful when Postgres is down — unlike /health behind the middleware).
+app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "ezcert-processor" }));
 
 app.MapGenerationEndpoints();
 app.MapAttemptEndpoints();

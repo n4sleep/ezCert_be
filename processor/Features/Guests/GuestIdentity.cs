@@ -46,6 +46,14 @@ public static class GuestMiddlewareExtensions
         var crossSite = !env.IsDevelopment();
         return app.Use(async (ctx, next) =>
         {
+            // Health paths stay DB-free: a Postgres outage must not turn the
+            // health check into a 500 (that restarts the service on App Runner).
+            if (ctx.Request.Path.StartsWithSegments("/health") ||
+                ctx.Request.Path.StartsWithSegments("/api/health"))
+            {
+                await next();
+                return;
+            }
             var db = ctx.RequestServices.GetRequiredService<EzCertDbContext>();
             var id = GuestIdentity.GetOrCreateDeviceId(ctx, crossSite);
 

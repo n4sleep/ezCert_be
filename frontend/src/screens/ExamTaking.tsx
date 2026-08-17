@@ -7,9 +7,10 @@ import ConfirmDialog from "../components/ConfirmDialog";
 interface Props {
   examId: string;
   onFinished: (attemptId: string) => void;
+  onAbandon: () => void;
 }
 
-export default function ExamTaking({ examId, onFinished }: Props) {
+export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
   const [attempt, setAttempt] = useState<AttemptDto | null>(null);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
@@ -17,6 +18,7 @@ export default function ExamTaking({ examId, onFinished }: Props) {
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [confirmAbandon, setConfirmAbandon] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const { push } = useToasts();
 
@@ -31,6 +33,15 @@ export default function ExamTaking({ examId, onFinished }: Props) {
   const isMulti = current?.type === "multi";
   const rev = current ? revealed[current.attemptQuestionId] : undefined;
   const progress = attempt ? Math.round(((index + 1) / attempt.questions.length) * 100) : 0;
+  const hasProgress = Object.keys(revealed).length > 0;
+
+  function requestBack() {
+    if (hasProgress) {
+      setConfirmAbandon(true);
+    } else {
+      onAbandon();
+    }
+  }
 
   function toggle(choiceId: string) {
     if (isMulti) {
@@ -94,6 +105,14 @@ export default function ExamTaking({ examId, onFinished }: Props) {
       {/* Top info bar */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-surface-container rounded-xl p-lg shadow-sm gap-md w-full">
         <div className="flex flex-col gap-xs">
+          <button
+            type="button"
+            className="w-fit inline-flex items-center gap-xs text-on-surface-variant hover:text-primary transition-colors mb-xs cursor-pointer"
+            onClick={requestBack}
+          >
+            <span>←</span>
+            <span className="text-label-md font-label-md">Back to exams</span>
+          </button>
           <span className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Current Exam</span>
           <h1 className="font-headline-md text-headline-md text-on-surface">AZ-900 Cloud Concepts Practice</h1>
         </div>
@@ -235,6 +254,20 @@ export default function ExamTaking({ examId, onFinished }: Props) {
           busy={submitting}
           onConfirm={doSubmit}
           onCancel={() => setConfirmSubmit(false)}
+        />
+      )}
+
+      {confirmAbandon && (
+        <ConfirmDialog
+          title="Abandon exam?"
+          body="This attempt won't be saved and won't appear in your results. You can start the exam again anytime."
+          confirmLabel="Abandon"
+          busy={false}
+          onConfirm={() => {
+            setConfirmAbandon(false);
+            onAbandon();
+          }}
+          onCancel={() => setConfirmAbandon(false)}
         />
       )}
     </div>

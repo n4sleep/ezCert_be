@@ -170,7 +170,7 @@ public static class AttemptEndpoints
             var device = GuestIdentity.GetOrCreateDeviceId(ctx);
             var rows = await db.Attempts
                 .Include(a => a.Exam)
-                .Where(a => a.DeviceId == device)
+                .Where(a => a.DeviceId == device && a.Status != "in_progress")
                 .OrderByDescending(a => a.StartedAt)
                 .Take(50)
                 .Select(a => new

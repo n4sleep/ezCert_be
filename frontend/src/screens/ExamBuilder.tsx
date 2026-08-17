@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { request } from "../api/client";
 import type { ExamJobStatus, ExamSummary } from "../types";
 import { useToasts } from "../components/Toast";
@@ -29,19 +29,6 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
   const inputRef = useRef<HTMLInputElement>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const { push } = useToasts();
-  const seeded = useRef(false);
-
-  // ChatGPT-style history: on first mount, render past exams as cards.
-  useEffect(() => {
-    if (seeded.current) return;
-    seeded.current = true;
-    if (exams.length === 0) return;
-    setFeed((f) => [
-      ...f,
-      { id: nextId++, kind: "bot", text: "Here are your previous exams — start any of them anytime." },
-      ...exams.map((e) => ({ id: nextId++, kind: "exam" as const, examId: e.examId })),
-    ]);
-  }, [exams]);
 
   function newExam() {
     setFeed([]);
@@ -131,7 +118,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
             onClick={newExam}
           >
             <span className="text-[20px]">+</span>
-            New Exam
+            New Chat
           </button>
         </div>
         <div className="px-lg pb-md">
@@ -297,7 +284,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
               </button>
             </div>
             <p className="text-center font-body-sm text-[11px] text-on-surface-variant/60 mt-3">
-              ezCert can make mistakes. Verify important information.
+              ExamGenius can make mistakes. Verify important information.
             </p>
           </div>
         </div>
