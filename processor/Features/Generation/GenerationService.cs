@@ -33,6 +33,7 @@ public class GenerationService
         var count = cfg.Count is > 0 and <= 20 ? cfg.Count!.Value : 5;
         var cert = string.IsNullOrWhiteSpace(cfg.Cert) ? DetectCert(prompt) : cfg.Cert!;
         var difficulty = string.IsNullOrWhiteSpace(cfg.Difficulty) ? DetectDifficulty(prompt) : cfg.Difficulty!;
+        var mode = cfg.Mode == "certification" ? "certification" : "practice";
 
         var query = await _bedrock.EmbedAsync(prompt, ct);
         var ns = $"official:{NormalizeCert(cert)}";
@@ -44,33 +45,26 @@ public class GenerationService
             filter: Qdrant.Client.Grpc.Conditions.MatchKeyword("namespace", ns),
             cancellationToken: ct);
 
-        var context = string.Join("\n\n", hits.Select(h =>
-        {
-            var p = h.Payload;
-            var url = p.TryGetValue("source_url", out var u) ? u.StringValue : "";
-            var text = p.TryGetValue("text", out var t) ? t.StringValue : "";
-            return $"[source: {url}]\n{text}";
-        }));
-        var allowedUrls = hits
-            .Select(h => h.Payload.TryGetValue("source_url", out var u) ? (u.StringValue ?? "").Trim().TrimEnd('/') : "")
-            .Where(u => !string.IsNullOrWhiteSpace(u))
-            .Distinct()
-            .ToList();
-        _log.LogWarning("RAG search: {Hits} hits, {Urls} allowed urls, ns={Ns}", hits.Count, allowedUrls.Count, ns);
-        if (hits.Count == 0)
+        // Request-local evidence IDs (E1..En) — raw Qdrant point IDs never leave
+        // the server (provenance constraint). The mapping lives in this scope only.
+        var evidence = BuildEvidence(hits);
+        var context = string.Join("\n\n", evidence.Select(e =>
+            $"[EVIDENCE: {e.Id}]\nSource: {e.Url}\nTitle: {e.Title}\nSection: {e.Section}\nText:\n{e.Text}"));
+        _log.LogWarning("RAG search: {Hits} hits, {Evidence} evidence blocks, ns={Ns}", hits.Count, evidence.Count, ns);
+        if (evidence.Count == 0)
             _log.LogWarning("No Qdrant chunks retrieved for {Ns} (collection may need seeding)", ns);
 
-        var system = "You are an exam generator for Microsoft AZ-900 (Azure Fundamentals). " +
-                     "Generate questions STRICTLY grounded in the provided source material. " +
+        var system = "You are an exam generator. Generate questions STRICTLY grounded in the provided EVIDENCE blocks. " +
+                     "Each question MUST reference at least one evidence ID. " +
                      "Return ONLY a JSON object, no markdown fences, no commentary. " +
-                     "In the JSON, set sourceUrl to an empty string \"\" — the system will attach the correct source URL.";
-        var user = BuildPrompt(prompt, count, cert, difficulty, context, allowedUrls);
+                     "In the JSON, set sourceUrl to an empty string \"\" — the system attaches the trusted source.";
+        var user = BuildPrompt(prompt, count, cert, difficulty, mode, context);
 
         for (var attempt = 1; attempt <= 3; attempt++)
         {
             var raw = await _bedrock.GenerateAsync(user, system, 2500, 0.3f, ct);
             _log.LogDebug("Generation attempt {Attempt} raw output: {Raw}", attempt, raw);
-            var exam = await TryPersistAsync(deviceId, prompt, cert, difficulty, count, raw, allowedUrls, ct);
+            var exam = await TryPersistAsync(deviceId, prompt, cert, difficulty, mode, count, raw, evidence, ct);
             if (exam is not null)
             {
                 _log.LogInformation("Generation ok on attempt {Attempt} ({Count} questions)", attempt, exam.Questions.Count);
@@ -82,18 +76,15 @@ public class GenerationService
         return null;
     }
 
-    private string BuildPrompt(string prompt, int count, string cert, string difficulty, string context, List<string> allowedUrls)
+    private string BuildPrompt(string prompt, int count, string cert, string difficulty, string mode, string context)
     {
         return $$"""
-        Create a practice exam for {{cert}} at {{difficulty}} difficulty with exactly {{count}} questions.
+        Create a {{mode}} practice exam for {{cert}} at {{difficulty}} difficulty with exactly {{count}} questions.
 
         USER REQUEST: "{{prompt}}"
 
-        SOURCE MATERIAL (ground all questions in this; cite the source URL per question):
+        EVIDENCE BLOCKS (ground EVERY question in these; cite via evidenceIds):
         {{context}}
-
-        ALLOWED SOURCE URLS (sourceUrl MUST be one of these, exactly):
-        {{string.Join("\n", allowedUrls)}}
 
         Respond with a JSON object of this exact shape:
         {
@@ -105,7 +96,9 @@ public class GenerationService
               "choices": [ { "label": "a", "text": "choice text" } ],
               "correct": ["a"],
               "explanation": "2-3 sentence explanation",
-              "sourceUrl": "https://learn.microsoft.com/..."
+              "section": "short semantic topic area",
+              "topic": "narrower subject",
+              "evidenceIds": ["E1", "E3"]
             }
           ]
         }
@@ -113,12 +106,48 @@ public class GenerationService
         Rules:
         - exactly {{count}} questions
         - 2 choices for truefalse, 3-4 for single, 4 for multi (multi has 2+ correct)
-        - every explanation must reference the source material
-        - sourceUrl MUST be "" (empty string) in every question
+        - every explanation must reference the evidence blocks
+        - evidenceIds MUST reference only IDs present in the EVIDENCE BLOCKS (E1, E2, ...)
+        - at least one evidenceIds entry per question; use more than one when the question draws on multiple blocks
+        - sourceUrl is never present in the output
         """;
     }
 
-    private async Task<Exam?> TryPersistAsync(string deviceId, string prompt, string cert, string difficulty, int count, string raw, List<string> allowedUrls, CancellationToken ct)
+    // Maps retrieved Qdrant hits to request-local evidence IDs. Raw point IDs are
+    // never exposed to the LLM or persisted.
+    private sealed class EvidenceBlock
+    {
+        public required string Id { get; init; }
+        public required string Url { get; init; }
+        public required string Title { get; init; }
+        public required string Section { get; init; }
+        public required string Text { get; init; }
+    }
+
+    private static List<EvidenceBlock> BuildEvidence(IReadOnlyList<Qdrant.Client.Grpc.ScoredPoint> hits)
+    {
+        var list = new List<EvidenceBlock>();
+        for (var i = 0; i < hits.Count; i++)
+        {
+            var p = hits[i].Payload;
+            var url = (p.TryGetValue("source_url", out var u) ? u.StringValue : "")?.Trim().TrimEnd('/') ?? "";
+            var text = p.TryGetValue("text", out var t) ? t.StringValue : "";
+            var title = p.TryGetValue("source_title", out var st) ? st.StringValue : "";
+            var section = p.TryGetValue("section", out var s) ? s.StringValue : "";
+            if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(text)) continue;
+            list.Add(new EvidenceBlock
+            {
+                Id = $"E{i + 1}",
+                Url = url,
+                Title = title,
+                Section = section,
+                Text = text,
+            });
+        }
+        return list;
+    }
+
+    private async Task<Exam?> TryPersistAsync(string deviceId, string prompt, string cert, string difficulty, string mode, int count, string raw, List<EvidenceBlock> evidence, CancellationToken ct)
     {
         try
         {
@@ -134,7 +163,7 @@ public class GenerationService
                 Title = title,
                 Description = $"Generated from: {prompt}",
                 CertificationCode = cert.ToUpperInvariant(),
-                Mode = "practice",
+                Mode = mode,
                 Difficulty = difficulty,
                 DurationMinutes = Math.Clamp(count * 2, 5, 60),
                 PassPercent = 70,
@@ -185,21 +214,39 @@ public class GenerationService
                     Type = type,
                     Text = qText.GetString()!,
                     Explanation = q.TryGetProperty("explanation", out var ex) ? ex.GetString() ?? "" : "",
+                    Section = q.TryGetProperty("section", out var sec) && !string.IsNullOrWhiteSpace(sec.GetString())
+                        ? sec.GetString()!
+                        : evidence.FirstOrDefault()?.Section ?? "general",
+                    Topic = q.TryGetProperty("topic", out var top) ? top.GetString() ?? "" : "",
                 };
                 question.Choices.AddRange(choiceList);
-                // Grounding: if the model left sourceUrl empty (or invented one),
-                // attach the URL of the retrieved chunk (AD-14: citation required).
-                var url = "";
-                if (q.TryGetProperty("sourceUrl", out var src))
-                    url = (src.GetString() ?? "").Trim().TrimEnd('/');
-                if (string.IsNullOrWhiteSpace(url) || !allowedUrls.Contains(url))
-                    url = allowedUrls.FirstOrDefault() ?? "";
-                if (string.IsNullOrWhiteSpace(url))
+
+                // Evidence provenance: resolve evidenceIds against the retrieved
+                // context; invalid or missing references reject the question.
+                var refs = new List<EvidenceBlock>();
+                if (q.TryGetProperty("evidenceIds", out var evIds) && evIds.ValueKind == JsonValueKind.Array)
                 {
-                    _log.LogWarning("Generation rejected: no grounded source URL available");
-                    return null;
+                    foreach (var ev in evIds.EnumerateArray())
+                    {
+                        var id = ev.GetString();
+                        var match = id is not null ? evidence.FirstOrDefault(e => e.Id == id) : null;
+                        if (match is null) return null; // invented/unknown evidence id -> reject
+                        if (refs.All(r => r.Id != match.Id)) refs.Add(match);
+                    }
                 }
-                question.Citations.Add(new QuestionCitation { SourceUrl = url, QuotedText = question.Explanation });
+                if (refs.Count == 0) return null; // no grounded evidence -> reject
+
+                foreach (var ev in refs)
+                {
+                    question.Citations.Add(new QuestionCitation
+                    {
+                        SourceDocumentId = null, // web/official docs have no source row yet (WS-3B adds source:<id>)
+                        SourceUrl = ev.Url,
+                        SourceTitle = string.IsNullOrWhiteSpace(ev.Title) ? null : ev.Title,
+                        Section = string.IsNullOrWhiteSpace(ev.Section) ? null : ev.Section,
+                        QuotedText = ev.Text, // actual retrieved passage, never the AI explanation
+                    });
+                }
 
                 exam.Questions.Add(question);
             }
@@ -256,5 +303,6 @@ public class GenerationService
         public int? Count { get; set; }
         public string? Cert { get; set; }
         public string? Difficulty { get; set; }
+        public string? Mode { get; set; }
     }
 }

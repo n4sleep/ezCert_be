@@ -37,7 +37,13 @@ public static class AttemptEndpoints
                 ExpiresAt = exam.Mode == "certification" ? DateTime.UtcNow.AddMinutes(exam.DurationMinutes) : null,
             };
 
-            foreach (var q in exam.Questions.OrderBy(q => q.Ordinal))
+            // Certification sessions get a randomized per-session question order
+            // (4-6): shuffle the snapshot order so no two attempts look alike.
+            var questionOrder = exam.Questions.OrderBy(q => q.Ordinal).ToList();
+            if (exam.Mode == "certification")
+                questionOrder = questionOrder.OrderBy(_ => Random.Shared.Next()).ToList();
+
+            foreach (var q in questionOrder)
             {
                 attempt.Questions.Add(new AttemptQuestion
                 {
@@ -61,6 +67,8 @@ public static class AttemptEndpoints
             {
                 attemptId = attempt.Id,
                 status = attempt.Status,
+                mode = exam.Mode,
+                expiresAt = attempt.ExpiresAt,
                 questions = attempt.Questions.OrderBy(q => q.Ordinal).Select(q => new
                 {
                     attemptQuestionId = q.Id,
@@ -77,6 +85,7 @@ public static class AttemptEndpoints
         {
             var device = GuestIdentity.GetOrCreateDeviceId(ctx);
             var attempt = await db.Attempts
+                .Include(a => a.Exam)
                 .Include(a => a.Questions).ThenInclude(q => q.Answer)
                 .FirstOrDefaultAsync(a => a.Id == attemptId);
             if (attempt is null || attempt.DeviceId != device) return Results.NotFound();

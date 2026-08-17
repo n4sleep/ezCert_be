@@ -51,6 +51,7 @@ public class SeedService
         {
             var markdown = await File.ReadAllTextAsync(file, ct);
             var sourceUrl = ExtractCanonicalUrl(markdown) ?? $"file://{Path.GetFileName(file)}";
+            var sourceTitle = ExtractTitle(markdown) ?? Path.GetFileNameWithoutExtension(file);
             var ordinal = 0;
             foreach (var chunk in Chunk(markdown, 700, 80))
             {
@@ -67,6 +68,7 @@ public class SeedService
                     {
                         ["namespace"] = ns,
                         ["source_url"] = sourceUrl,
+                        ["source_title"] = sourceTitle,
                         ["section"] = chunk.Section,
                         ["text"] = chunk.Text,
                         ["ordinal"] = ordinal++,
@@ -121,6 +123,12 @@ public class SeedService
     {
         var m = System.Text.RegularExpressions.Regex.Match(markdown, @"canonicalUrl: (https?://\S+)");
         return m.Success ? m.Groups[1].Value.Trim() : null;
+    }
+
+    private static string? ExtractTitle(string markdown)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(markdown, @"(?m)^title:\s*(.+)$");
+        return m.Success ? m.Groups[1].Value.Trim().Trim('"') : null;
     }
 
     private static string NormalizeCert(string cert) => cert.Trim().ToUpperInvariant().Replace("-", ""); // az-900 -> AZ900

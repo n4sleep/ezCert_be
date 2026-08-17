@@ -42,6 +42,8 @@ public class Question
     public string Type { get; set; } = "single";     // single | multi | truefalse
     public string Text { get; set; } = "";
     public string Explanation { get; set; } = "";
+    public string Section { get; set; } = "general"; // semantic topic area (WS-4)
+    public string Topic { get; set; } = "";          // narrower subject within the section
     public List<Choice> Choices { get; set; } = new();
     public List<QuestionCitation> Citations { get; set; } = new();
 }
@@ -64,6 +66,8 @@ public class QuestionCitation
     public Question? Question { get; set; }
     public Guid? SourceDocumentId { get; set; }
     public string? SourceUrl { get; set; }
+    public string? SourceTitle { get; set; }
     public string? PageNumber { get; set; }
+    public string? Section { get; set; }
     public string QuotedText { get; set; } = "";
 }

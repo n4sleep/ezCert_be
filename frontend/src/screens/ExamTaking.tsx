@@ -31,6 +31,7 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
   const current = attempt?.questions[index];
   const isLast = attempt !== null && index === attempt.questions.length - 1;
   const isMulti = current?.type === "multi";
+  const isCert = attempt?.mode === "certification";
   const rev = current ? revealed[current.attemptQuestionId] : undefined;
   const progress = attempt ? Math.round(((index + 1) / attempt.questions.length) * 100) : 0;
   const hasProgress = Object.keys(revealed).length > 0;
@@ -152,12 +153,13 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
             {current.choices.map((c) => {
               const picked = selected.includes(c.label);
-              const isCorrectChoice = rev?.correct?.includes(c.label);
-              const isWrongPick = rev && picked && !rev.correct?.includes(c.label);
+              const revealedRes = rev?.isCorrect !== null && rev?.isCorrect !== undefined;
+              const isCorrectChoice = revealedRes ? rev?.correct?.includes(c.label) : undefined;
+              const isWrongPick = revealedRes ? rev && picked && !rev.correct?.includes(c.label) : undefined;
 
               let cls = "flex items-center p-md rounded-xl shadow-sm transition-all duration-200 w-full text-left ";
               let labelCls = "w-8 h-8 rounded-full border-2 border-outline flex items-center justify-center font-label-md text-on-surface-variant mr-md ";
-              if (rev) {
+              if (revealedRes) {
                 if (isCorrectChoice) {
                   cls += "bg-success-soft ring-2 ring-success-strong shadow-[0_8px_20px_rgba(16,185,129,0.15)]";
                   labelCls = "w-8 h-8 rounded-full bg-success-strong text-white flex items-center justify-center font-label-md mr-md shadow-sm ";
@@ -192,7 +194,7 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
           </div>
         </div>
 
-        {rev && (
+        {rev && !isCert && (
           <div
             className={
               "rounded-xl p-lg " +
@@ -206,6 +208,13 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
                 Read the source →
               </a>
             )}
+          </div>
+        )}
+
+        {rev && isCert && (
+          <div className="rounded-xl p-lg bg-surface-container border border-outline-variant/30 text-on-surface-variant">
+            <h4 className="font-label-md font-bold mb-sm">Answer recorded</h4>
+            <p className="font-body-sm">Correctness and explanations are revealed after you submit the exam.</p>
           </div>
         )}
       </div>

@@ -35,7 +35,7 @@ Browser → https://examgenius.bd-apa-coi.com (Route53 alias, rich sandbox 73033
   sudo systemctl enable --now docker
   sudo docker run -d --name qdrant --restart unless-stopped \
     -p 6333:6333 -p 6334:6334 \
-    -e QDRANT__SERVICE__API_KEY=ezcert-qdrant-2026-demo \
+    -e QDRANT__SERVICE__API_KEY=<rotated-secret-not-in-repo> \
     -v qdrant_data:/qdrant/storage \
     qdrant/qdrant:v1.19.0
   ```

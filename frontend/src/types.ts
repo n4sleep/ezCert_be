@@ -19,6 +19,8 @@ export interface AttemptQuestionDto {
 export interface AttemptDto {
   attemptId: string;
   status: string;
+  mode: string;
+  expiresAt: string | null;
   questions: AttemptQuestionDto[];
 }
 
