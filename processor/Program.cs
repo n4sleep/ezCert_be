@@ -113,20 +113,39 @@ app.MapPost("/api/admin/seed", async (HttpContext ctx, SeedService seed, Cancell
     return Results.Ok(new { cert, chunks = n, namespace_ = $"official:{cert.Trim().ToUpperInvariant().Replace("-", "")}" });
 });
 
-// Seed official content on startup when the collection is empty (idempotent).
+// Seed official content on startup: every cert in seed/official whose
+// namespace is missing (per-cert idempotent; stable point IDs make re-seeds
+// safe). Wrapped so Qdrant downtime never blocks the API from starting.
 using (var scope = app.Services.CreateScope())
 {
     try
     {
         var seed = scope.ServiceProvider.GetRequiredService<SeedService>();
         var qd = scope.ServiceProvider.GetRequiredService<QdrantClient>();
+        var seedDir = Path.Combine(AppContext.BaseDirectory, "seed", "official");
         var collections = await qd.ListCollectionsAsync();
         if (!collections.Contains(SeedService.Collection))
         {
-            var seedDir = Path.Combine(AppContext.BaseDirectory, "seed", "official");
-            var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-            var n = await seed.SeedOfficialAsync("az900", seedDir);
-            log.LogInformation("Startup seed complete: {Count} chunks", n);
+            await qd.CreateCollectionAsync(SeedService.Collection,
+                new Qdrant.Client.Grpc.VectorParams
+                {
+                    Size = SeedService.Dims,
+                    Distance = Qdrant.Client.Grpc.Distance.Cosine,
+                });
+        }
+        foreach (var dir in Directory.GetDirectories(seedDir))
+        {
+            var cert = Path.GetFileName(dir);
+            var ns = $"official:{cert.Trim().ToUpperInvariant().Replace("-", "")}";
+            if (await seed.NamespaceExistsAsync(ns))
+            {
+                var log = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                log.LogInformation("Startup seed skipped for {Cert}: namespace {Ns} already present", cert, ns);
+                continue;
+            }
+            var n = await seed.SeedOfficialAsync(cert, seedDir);
+            var log2 = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            log2.LogInformation("Startup seed complete for {Cert}: {Count} chunks", cert, n);
         }
     }
     catch (Exception ex)

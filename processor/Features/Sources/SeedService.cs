@@ -26,6 +26,11 @@ public class SeedService
     // Loads processor/seed/official/{cert}/*.md -> chunks -> embed -> upsert.
     public async Task<int> SeedOfficialAsync(string cert, string seedDir, CancellationToken ct = default)
     {
+        if (!IsValidCert(cert))
+        {
+            _log.LogWarning("Seed skipped: invalid cert code '{Cert}' (must be alphanumeric, e.g. AZ-900)", cert);
+            return 0;
+        }
         var dir = Path.Combine(seedDir, cert.ToLowerInvariant());
         if (!Directory.Exists(dir))
         {
@@ -40,18 +45,23 @@ public class SeedService
 
         var ns = $"official:{NormalizeCert(cert)}";
         var points = new List<PointStruct>();
-        ulong id = 0;
+        var total = 0;
 
         foreach (var file in Directory.GetFiles(dir, "*.md"))
         {
             var markdown = await File.ReadAllTextAsync(file, ct);
             var sourceUrl = ExtractCanonicalUrl(markdown) ?? $"file://{Path.GetFileName(file)}";
+            var ordinal = 0;
             foreach (var chunk in Chunk(markdown, 700, 80))
             {
+                // Stable point IDs (FNV-1a over namespace + chunk text): re-seeding
+                // the same cert is an idempotent upsert, and seeding a second cert
+                // can never overwrite the first one's points (namespaces differ).
+                var id = StableId(ns, chunk.Text);
                 var emb = await _bedrock.EmbedAsync(chunk.Text, ct);
                 points.Add(new PointStruct
                 {
-                    Id = ++id,
+                    Id = id,
                     Vectors = emb,
                     Payload =
                     {
@@ -59,6 +69,7 @@ public class SeedService
                         ["source_url"] = sourceUrl,
                         ["section"] = chunk.Section,
                         ["text"] = chunk.Text,
+                        ["ordinal"] = ordinal++,
                     },
                 });
                 if (points.Count >= 32)
@@ -66,14 +77,44 @@ public class SeedService
                     await _qdrant.UpsertAsync(Collection, points, cancellationToken: ct);
                     points.Clear();
                 }
+                total++;
             }
         }
 
         if (points.Count > 0)
             await _qdrant.UpsertAsync(Collection, points, cancellationToken: ct);
 
-        _log.LogInformation("Seeded {Count} chunks for {Ns}", id, ns);
-        return (int)id;
+        _log.LogInformation("Seeded {Count} chunks for {Ns}", total, ns);
+        return total;
+    }
+
+    // True when the namespace has at least one point (used for per-cert idempotency).
+    public async Task<bool> NamespaceExistsAsync(string ns, CancellationToken ct = default)
+    {
+        var result = await _qdrant.ScrollAsync(
+            Collection,
+            limit: 1,
+            payloadSelector: new Qdrant.Client.Grpc.WithPayloadSelector { Enable = false },
+            filter: Qdrant.Client.Grpc.Conditions.MatchKeyword("namespace", ns),
+            cancellationToken: ct);
+        return result.Result?.Count > 0;
+    }
+
+    private static bool IsValidCert(string cert) =>
+        !string.IsNullOrWhiteSpace(cert) && System.Text.RegularExpressions.Regex.IsMatch(cert, @"^[A-Za-z0-9-]+$");
+
+    // FNV-1a 64-bit over UTF-8 bytes of namespace + chunk text -> stable point ID.
+    private static ulong StableId(string ns, string text)
+    {
+        const ulong fnvOffset = 14695981039346656037UL;
+        const ulong fnvPrime = 1099511628211UL;
+        var hash = fnvOffset;
+        foreach (var b in System.Text.Encoding.UTF8.GetBytes($"{ns}\u0000{text}"))
+        {
+            hash ^= b;
+            hash *= fnvPrime;
+        }
+        return hash;
     }
 
     private static string? ExtractCanonicalUrl(string markdown)
