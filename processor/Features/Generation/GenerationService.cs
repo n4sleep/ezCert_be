@@ -27,7 +27,7 @@ public class GenerationService
         _log = log;
     }
 
-    public async Task<Exam?> GenerateAsync(string deviceId, string prompt, string? configJson, CancellationToken ct = default)
+    public async Task<Exam?> GenerateAsync(string deviceId, string prompt, string? configJson, Func<string, Task>? onStage = null, CancellationToken ct = default)
     {
         var cfg = ParseConfig(configJson);
         var count = cfg.Count is > 0 and <= 20 ? cfg.Count!.Value : 5;
@@ -35,6 +35,7 @@ public class GenerationService
         var difficulty = string.IsNullOrWhiteSpace(cfg.Difficulty) ? DetectDifficulty(prompt) : cfg.Difficulty!;
         var mode = cfg.Mode == "certification" ? "certification" : "practice";
 
+        if (onStage is not null) await onStage("embedding");
         var query = await _bedrock.EmbedAsync(prompt, ct);
         var ns = $"official:{NormalizeCert(cert)}";
         var hits = await _qdrant.SearchAsync(
@@ -60,8 +61,10 @@ public class GenerationService
                      "In the JSON, set sourceUrl to an empty string \"\" — the system attaches the trusted source.";
         var user = BuildPrompt(prompt, count, cert, difficulty, mode, context);
 
+        if (onStage is not null) await onStage("generating");
         for (var attempt = 1; attempt <= 3; attempt++)
         {
+            if (onStage is not null) await onStage(attempt > 1 ? "generating" : "validating");
             var raw = await _bedrock.GenerateAsync(user, system, 2500, 0.3f, ct);
             _log.LogDebug("Generation attempt {Attempt} raw output: {Raw}", attempt, raw);
             var exam = await TryPersistAsync(deviceId, prompt, cert, difficulty, mode, count, raw, evidence, ct);

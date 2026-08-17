@@ -17,7 +17,7 @@ public static class GenerationEndpoints
 
     public static IEndpointRouteBuilder MapGenerationEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/exam-jobs", async (CreateJobRequest req, EzCertDbContext db, HttpContext ctx) =>
+        app.MapPost("/api/exam-jobs", async (CreateJobRequest req, EzCertDbContext db, HttpContext ctx, JobQueue queue) =>
         {
             if (string.IsNullOrWhiteSpace(req.Prompt))
                 return Results.BadRequest(new { error = "prompt is required" });
@@ -28,42 +28,15 @@ public static class GenerationEndpoints
                 Prompt = req.Prompt,
                 ConfigJson = req.ConfigJson ?? "{}",
                 Status = "queued",
+                Stage = "queued",
             };
             db.ProcessingJobs.Add(job);
             await db.SaveChangesAsync();
 
-            // Inline execution for the demo (job table stays the queue contract
-            // for a later background worker, AD-7).
-            var generation = ctx.RequestServices.GetRequiredService<GenerationService>();
-            job.Status = "running";
-            job.Progress = 0.2;
-            await db.SaveChangesAsync();
-
-            try
-            {
-                var exam = await generation.GenerateAsync(job.OwnerDeviceId ?? "", req.Prompt, req.ConfigJson, ctx.RequestAborted);
-                if (exam is null)
-                {
-                    job.Status = "failed";
-                    job.Error = "Generation failed after retries — Bedrock is unavailable or returned invalid content. Try again shortly.";
-                    job.Progress = 1;
-                    await db.SaveChangesAsync();
-                    return Results.Accepted($"/api/exam-jobs/{job.Id}", new { jobId = job.Id });
-                }
-                job.ExamId = exam.Id;
-                job.Status = "completed";
-                job.Progress = 1;
-                await db.SaveChangesAsync();
-            }
-            catch (Exception ex)
-            {
-                var log = ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("GenerationEndpoints");
-                log.LogError(ex, "Exam job {JobId} failed", job.Id);
-                job.Status = "failed";
-                job.Error = "Generation failed — the AI service is unavailable right now. Please try again.";
-                job.Progress = 1;
-                await db.SaveChangesAsync();
-            }
+            // WS-3A: enqueue only — the ProcessingWorker executes the pipeline
+            // from the DB queue; the 202 returns immediately. JobQueue is just
+            // a wake-up signal so the poll loop is not delayed.
+            queue.Wake(job.Id);
 
             return Results.Accepted($"/api/exam-jobs/{job.Id}", new { jobId = job.Id });
         });
@@ -79,6 +52,7 @@ public static class GenerationEndpoints
             {
                 jobId = job.Id,
                 status = job.Status,
+                stage = job.Stage,
                 examId = job.ExamId,
                 error = job.Error,
                 progress = job.Progress,

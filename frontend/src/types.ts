@@ -3,6 +3,7 @@
 export interface ExamJobStatus {
   jobId: string;
   status: "queued" | "running" | "completed" | "failed";
+  stage: string | null;
   examId: string | null;
   error: string | null;
   progress: number | null;

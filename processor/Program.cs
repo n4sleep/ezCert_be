@@ -46,6 +46,8 @@ var qdrantKey = builder.Configuration["Qdrant:ApiKey"] ?? "";
 builder.Services.AddSingleton(new QdrantClient(qdrantHost, qdrantPort, qdrantHttps, qdrantKey));
 builder.Services.AddScoped<SeedService>();
 builder.Services.AddScoped<GenerationService>();
+builder.Services.AddSingleton<JobQueue>();
+builder.Services.AddHostedService<ProcessingWorker>();
 
 // Bedrock access (AD-14): "gateway" = rich-sandbox HTTP gateway (hosted),
 // "direct" = local Bedrock via SSO credentials (dev).
