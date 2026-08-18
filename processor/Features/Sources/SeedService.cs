@@ -50,10 +50,10 @@ public class SeedService
         foreach (var file in Directory.GetFiles(dir, "*.md"))
         {
             var markdown = await File.ReadAllTextAsync(file, ct);
-            var sourceUrl = ExtractCanonicalUrl(markdown) ?? $"file://{Path.GetFileName(file)}";
-            var sourceTitle = ExtractTitle(markdown) ?? Path.GetFileNameWithoutExtension(file);
+            var sourceUrl = TextChunker.ExtractCanonicalUrl(markdown) ?? $"file://{Path.GetFileName(file)}";
+            var sourceTitle = TextChunker.ExtractTitle(markdown) ?? Path.GetFileNameWithoutExtension(file);
             var ordinal = 0;
-            foreach (var chunk in Chunk(markdown, 700, 80))
+            foreach (var chunk in TextChunker.Chunk(markdown, 700, 80))
             {
                 // Stable point IDs (FNV-1a over namespace + chunk text): re-seeding
                 // the same cert is an idempotent upsert, and seeding a second cert
@@ -106,7 +106,7 @@ public class SeedService
         !string.IsNullOrWhiteSpace(cert) && System.Text.RegularExpressions.Regex.IsMatch(cert, @"^[A-Za-z0-9-]+$");
 
     // FNV-1a 64-bit over UTF-8 bytes of namespace + chunk text -> stable point ID.
-    private static ulong StableId(string ns, string text)
+    public static ulong StableId(string ns, string text)
     {
         const ulong fnvOffset = 14695981039346656037UL;
         const ulong fnvPrime = 1099511628211UL;
@@ -119,54 +119,6 @@ public class SeedService
         return hash;
     }
 
-    private static string? ExtractCanonicalUrl(string markdown)
-    {
-        var m = System.Text.RegularExpressions.Regex.Match(markdown, @"canonicalUrl: (https?://\S+)");
-        return m.Success ? m.Groups[1].Value.Trim() : null;
-    }
-
-    private static string? ExtractTitle(string markdown)
-    {
-        var m = System.Text.RegularExpressions.Regex.Match(markdown, @"(?m)^title:\s*(.+)$");
-        return m.Success ? m.Groups[1].Value.Trim().Trim('"') : null;
-    }
-
     private static string NormalizeCert(string cert) => cert.Trim().ToUpperInvariant().Replace("-", ""); // az-900 -> AZ900
 
-    private static IEnumerable<(string Section, string Text)> Chunk(string markdown, int maxLen, int overlap)
-    {
-        // split on headings first
-        var sections = System.Text.RegularExpressions.Regex.Split(markdown, @"(?m)^(#{1,3} .*)$")
-            .Where(s => !string.IsNullOrWhiteSpace(s));
-        var current = "";
-        var heading = "";
-        foreach (var part in sections)
-        {
-            if (part.StartsWith('#'))
-            {
-                heading = part.Trim('#').Trim();
-                continue;
-            }
-            var clean = Clean(part);
-            if (string.IsNullOrWhiteSpace(clean)) continue;
-            if (current.Length + clean.Length + 2 <= maxLen)
-            {
-                current = current.Length == 0 ? clean : current + "\n\n" + clean;
-            }
-            else
-            {
-                if (current.Length > 0) yield return (heading, current);
-                current = clean;
-            }
-        }
-        if (current.Length > 0) yield return (heading, current);
-    }
-
-    private static string Clean(string text)
-    {
-        text = text.Replace("�?", "'").Replace("�?", "'").Replace("�?", "-").Replace("�?", "\"");
-        // strip inline code fences and URLs noise
-        text = System.Text.RegularExpressions.Regex.Replace(text, @"!\[[^\]]*\]\([^)]*\)", "");
-        return System.Text.RegularExpressions.Regex.Replace(text.Trim(), @"\s+", " ");
-    }
 }

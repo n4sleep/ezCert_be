@@ -45,7 +45,10 @@ var qdrantHttps = bool.TryParse(builder.Configuration["Qdrant:Https"], out var q
 var qdrantKey = builder.Configuration["Qdrant:ApiKey"] ?? "";
 builder.Services.AddSingleton(new QdrantClient(qdrantHost, qdrantPort, qdrantHttps, qdrantKey));
 builder.Services.AddScoped<SeedService>();
+builder.Services.AddScoped<SourceService>();
 builder.Services.AddScoped<GenerationService>();
+builder.Services.AddScoped<DiscoveryService>();
+builder.Services.AddHttpClient<EzCert.Processor.Infrastructure.CrawlerClient.CrawlerClient>();
 builder.Services.AddSingleton<JobQueue>();
 builder.Services.AddHostedService<ProcessingWorker>();
 

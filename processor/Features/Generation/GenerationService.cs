@@ -27,7 +27,7 @@ public class GenerationService
         _log = log;
     }
 
-    public async Task<Exam?> GenerateAsync(string deviceId, string prompt, string? configJson, Func<string, Task>? onStage = null, CancellationToken ct = default)
+    public async Task<Exam?> GenerateAsync(string deviceId, string prompt, string? configJson, IReadOnlyList<string> namespaces, Func<string, Task>? onStage = null, CancellationToken ct = default)
     {
         var cfg = ParseConfig(configJson);
         var count = cfg.Count is > 0 and <= 20 ? cfg.Count!.Value : 5;
@@ -37,24 +37,29 @@ public class GenerationService
 
         if (onStage is not null) await onStage("embedding");
         var query = await _bedrock.EmbedAsync(prompt, ct);
-        var ns = $"official:{NormalizeCert(cert)}";
-        var hits = await _qdrant.SearchAsync(
-            SeedService.Collection,
-            query,
-            limit: 8,
-            payloadSelector: new Qdrant.Client.Grpc.WithPayloadSelector { Enable = true },
-            filter: Qdrant.Client.Grpc.Conditions.MatchKeyword("namespace", ns),
-            cancellationToken: ct);
+
+        // Evidence-oriented quality gate (WS-3B): enough usable chunks to cover
+        // the requested question count, from at least one distinct source.
+        var minChunks = Math.Max(2, (int)Math.Ceiling(count / 2.0));
+        var hits = await SearchAsync(namespaces, query, ct);
+        var evidence = BuildEvidence(hits);
+        var distinctSources = evidence.Select(e => e.Url).Distinct().Count();
+        _log.LogWarning("RAG search: {Hits} hits, {Evidence} evidence blocks, {Sources} distinct sources, ns={Ns}",
+            hits.Count, evidence.Count, distinctSources, string.Join("|", namespaces));
+        if (evidence.Count == 0)
+            _log.LogWarning("No Qdrant chunks retrieved for {Ns} (collection may need seeding)", string.Join("|", namespaces));
+
+        if (evidence.Count < minChunks || distinctSources < 1)
+        {
+            _log.LogWarning("Evidence gate failed: {Evidence} evidence blocks (< {MinChunks} needed, {Sources} sources)",
+                evidence.Count, minChunks, distinctSources);
+            return null;
+        }
 
         // Request-local evidence IDs (E1..En) — raw Qdrant point IDs never leave
         // the server (provenance constraint). The mapping lives in this scope only.
-        var evidence = BuildEvidence(hits);
         var context = string.Join("\n\n", evidence.Select(e =>
             $"[EVIDENCE: {e.Id}]\nSource: {e.Url}\nTitle: {e.Title}\nSection: {e.Section}\nText:\n{e.Text}"));
-        _log.LogWarning("RAG search: {Hits} hits, {Evidence} evidence blocks, ns={Ns}", hits.Count, evidence.Count, ns);
-        if (evidence.Count == 0)
-            _log.LogWarning("No Qdrant chunks retrieved for {Ns} (collection may need seeding)", ns);
-
         var system = "You are an exam generator. Generate questions STRICTLY grounded in the provided EVIDENCE blocks. " +
                      "Each question MUST reference at least one evidence ID. " +
                      "Return ONLY a JSON object, no markdown fences, no commentary. " +
@@ -114,6 +119,33 @@ public class GenerationService
         - at least one evidenceIds entry per question; use more than one when the question draws on multiple blocks
         - sourceUrl is never present in the output
         """;
+    }
+
+    // Retrieval across one or more namespaces (official:{CERT} and/or source:{id}).
+    private async Task<IReadOnlyList<Qdrant.Client.Grpc.ScoredPoint>> SearchAsync(IReadOnlyList<string> namespaces, ReadOnlyMemory<float> query, CancellationToken ct)
+    {
+        if (namespaces.Count == 1)
+        {
+            return await _qdrant.SearchAsync(
+                SeedService.Collection,
+                query,
+                limit: 8,
+                payloadSelector: new Qdrant.Client.Grpc.WithPayloadSelector { Enable = true },
+                filter: Qdrant.Client.Grpc.Conditions.MatchKeyword("namespace", namespaces[0]),
+                cancellationToken: ct);
+        }
+
+        var filter = new Qdrant.Client.Grpc.Filter
+        {
+            Should = { namespaces.Select(ns => Qdrant.Client.Grpc.Conditions.MatchKeyword("namespace", ns)) },
+        };
+        return await _qdrant.SearchAsync(
+            SeedService.Collection,
+            query,
+            limit: 8,
+            payloadSelector: new Qdrant.Client.Grpc.WithPayloadSelector { Enable = true },
+            filter: filter,
+            cancellationToken: ct);
     }
 
     // Maps retrieved Qdrant hits to request-local evidence IDs. Raw point IDs are
@@ -285,8 +317,6 @@ public class GenerationService
         if (Regex.IsMatch(prompt, @"khó|hard|difficult|nâng cao", RegexOptions.IgnoreCase)) return "hard";
         return "medium";
     }
-
-    private static string NormalizeCert(string cert) => cert.Trim().ToUpperInvariant().Replace("-", ""); // AZ-900 -> AZ900
 
     private static GenerationConfig ParseConfig(string? configJson)
     {

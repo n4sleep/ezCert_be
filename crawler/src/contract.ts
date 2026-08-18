@@ -7,6 +7,11 @@ export interface CrawlRequest {
   includePaths?: string[];
 }
 
+export interface SearchRequest {
+  topic: string;
+  limit?: number;
+}
+
 export interface CrawledDocument {
   canonicalUrl: string;
   title: string;
@@ -19,4 +24,5 @@ export interface CrawledDocument {
 export interface CrawlProvider {
   name: string;
   crawl(req: CrawlRequest): Promise<CrawledDocument[]>;
+  search(req: SearchRequest): Promise<CrawledDocument[]>;
 }

@@ -72,6 +72,7 @@ public class ProcessingWorker : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<EzCertDbContext>();
         var generation = scope.ServiceProvider.GetRequiredService<GenerationService>();
+        var discovery = scope.ServiceProvider.GetRequiredService<DiscoveryService>();
         var job = await db.ProcessingJobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
         if (job is null) return;
 
@@ -81,14 +82,31 @@ public class ProcessingWorker : BackgroundService
             job.Progress = 0.1;
             await db.SaveChangesAsync(ct);
 
-            var exam = await generation.GenerateAsync(job.OwnerDeviceId ?? "", job.Prompt, job.ConfigJson,
+            var cfgCert = GetCertFromConfig(job.ConfigJson);
+            var namespaces = await discovery.ResolveNamespacesAsync(job.Prompt, cfgCert, ct);
+            if (namespaces.Count == 0)
+            {
+                job.Status = "failed";
+                job.Stage = "failed";
+                job.Error = DiscoveryService.IsCertTopic(job.Prompt, cfgCert)
+                    ? "Couldn't retrieve source material for this certification — try again shortly."
+                    : "Couldn't find enough trustworthy source material for this topic. Try a more specific topic or a known certification (e.g. AZ-900, CLF-C02).";
+                job.Progress = 1;
+                await db.SaveChangesAsync(ct);
+                _log.LogWarning("Job {JobId} failed: no namespaces resolved", jobId);
+                return;
+            }
+
+            var exam = await generation.GenerateAsync(job.OwnerDeviceId ?? "", job.Prompt, job.ConfigJson, namespaces,
                 stage => UpdateStageAsync(db, job, stage), ct);
 
             if (exam is null)
             {
                 job.Status = "failed";
                 job.Stage = "failed";
-                job.Error = "Generation failed after retries — the AI service is unavailable or returned invalid content. Try again shortly.";
+                job.Error = DiscoveryService.IsCertTopic(job.Prompt, cfgCert)
+                    ? "Generation failed after retries — the AI service is unavailable or returned invalid content. Try again shortly."
+                    : "Couldn't generate a grounded exam from the discovered material — the retrieved sources were insufficient or the AI service was unavailable. Try again.";
                 job.Progress = 1;
             }
             else
@@ -119,6 +137,19 @@ public class ProcessingWorker : BackgroundService
             job.Progress = 1;
             await db.SaveChangesAsync(CancellationToken.None);
             _log.LogError(ex, "Job {JobId} failed", jobId);
+        }
+    }
+
+    private static string? GetCertFromConfig(string configJson)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(configJson);
+            return doc.RootElement.TryGetProperty("cert", out var c) ? c.GetString() : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
         }
     }
 

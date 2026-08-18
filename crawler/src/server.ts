@@ -1,10 +1,11 @@
 import express from "express";
 import type { CrawlProvider } from "./contract.js";
 import { FirecrawlProvider } from "./providers/firecrawl.js";
-import { validateUrl } from "./safety.js";
+import { validateUrl, assertSafeUrl } from "./safety.js";
 
-// POST /crawl  { url, limit?, includePaths? } -> CrawledDocument[]
-// GET  /health -> { status: "ok" }
+// POST /crawl   { url, limit?, includePaths? } -> CrawledDocument[]
+// POST /search  { topic, limit? }               -> CrawledDocument[]
+// GET  /health  -> { status: "ok" }
 // The only public surface of the crawler (AD-8). Bearer auth (CRAWLER_SECRET)
 // gates every call except /health; URL safety checks (safety.ts) reject
 // localhost/private/link-local targets before any provider is invoked.
@@ -50,6 +51,31 @@ app.post("/crawl", async (req, res) => {
   } catch (err) {
     console.error("[crawler] crawl failed:", err);
     return res.status(502).json({ error: "crawl failed" });
+  }
+});
+
+app.post("/search", async (req, res) => {
+  const { topic, limit } = req.body ?? {};
+  if (typeof topic !== "string" || topic.trim().length === 0) {
+    return res.status(400).json({ error: "topic is required" });
+  }
+  try {
+    const docs = await pickProvider().search({ topic: topic.trim(), limit });
+    // Defense in depth: even though Firecrawl fetches server-side, reject any
+    // result that fails the URL safety gate (scheme/loopback/private/link-local).
+    const safe: Array<{ doc: (typeof docs)[number] }> = [];
+    for (const doc of docs) {
+      try {
+        await assertSafeUrl(doc.canonicalUrl);
+        safe.push({ doc });
+      } catch {
+        console.warn("[crawler] search result rejected (unsafe URL):", doc.canonicalUrl);
+      }
+    }
+    return res.json(safe.map((s) => s.doc));
+  } catch (err) {
+    console.error("[crawler] search failed:", err);
+    return res.status(502).json({ error: "search failed" });
   }
 });
 
