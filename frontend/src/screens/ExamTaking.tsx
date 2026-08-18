@@ -52,14 +52,15 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
   const isLast = attempt !== null && index === attempt.questions.length - 1;
   const isMulti = current?.type === "multi";
   const isCert = attempt?.mode === "certification";
-  const progress = attempt ? Math.round(((index + 1) / attempt.questions.length) * 100) : 0;
+
+  const answeredCount = Object.values(selections).filter((s) => s.length > 0).length;
+  const allAnswered = attempt !== null && answeredCount >= attempt.questions.length;
+  const progress = attempt ? Math.round((answeredCount / attempt.questions.length) * 100) : 0;
 
   const startedAt = attempt ? Date.parse(attempt.startedAt) : 0;
   const expiresAt = attempt?.expiresAt ? Date.parse(attempt.expiresAt) : null;
   const elapsedSeconds = startedAt ? (now - startedAt) / 1000 : 0;
   const remainingSeconds = expiresAt !== null ? (expiresAt - now) / 1000 : null;
-
-  const answeredCount = Object.values(selections).filter((s) => s.length > 0).length;
 
   // Certification time-up: auto-submit and capture the review.
   useEffect(() => {
@@ -322,9 +323,15 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
             Next →
           </button>
           <button
-            className="flex items-center justify-center px-xl py-md rounded-lg bg-success text-white font-label-md shadow-md hover:bg-[#059669] transition-all disabled:opacity-50"
+            className={
+              "flex items-center justify-center px-xl py-md rounded-lg font-label-md shadow-md transition-all disabled:opacity-50 " +
+              (allAnswered
+                ? "bg-success text-white hover:bg-[#059669]"
+                : "bg-surface-container-high text-on-surface-variant")
+            }
             onClick={() => setConfirmSubmit(true)}
-            disabled={submitting}
+            disabled={submitting || !allAnswered}
+            title={allAnswered ? "Submit exam" : "Answer all questions to submit"}
           >
             Submit Exam
           </button>
