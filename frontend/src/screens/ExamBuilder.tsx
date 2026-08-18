@@ -21,6 +21,7 @@ let nextId = 1;
 export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [prompt, setPrompt] = useState("");
+  const [mode, setMode] = useState<"practice" | "certification">("practice");
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
   const [shareFor, setShareFor] = useState<string | null>(null);
@@ -77,7 +78,11 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
     setFeed((f) => [...f, { id: nextId++, kind: "user", text }]);
 
     try {
-      const created = await request<{ jobId: string }>("/api/exam-jobs", { method: "POST", body: { prompt: text } });
+      const configJson = mode === "certification" ? JSON.stringify({ mode: "certification" }) : undefined;
+      const created = await request<{ jobId: string }>("/api/exam-jobs", {
+        method: "POST",
+        body: configJson ? { prompt: text, configJson } : { prompt: text },
+      });
       const job = await pollJob(created.jobId);
       if (job.status === "completed" && job.examId) {
         setPrompt("");
@@ -306,6 +311,23 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
                   <span className="text-[20px] -rotate-45 ml-1">➤</span>
                 )}
               </button>
+            </div>
+            <div className="flex items-center justify-center gap-sm mt-3">
+              <div className="inline-flex items-center gap-xs bg-surface-container-lowest border border-outline-variant/30 rounded-full p-1" role="group" aria-label="Exam mode">
+                {(["practice", "certification"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={
+                      "px-md py-xs rounded-full font-label-md transition-colors cursor-pointer " +
+                      (mode === m ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-primary")
+                    }
+                    onClick={() => setMode(m)}
+                  >
+                    {m === "practice" ? "Practice" : "Certification"}
+                  </button>
+                ))}
+              </div>
             </div>
             <p className="text-center font-body-sm text-[11px] text-on-surface-variant/60 mt-3">
               ExamGenius can make mistakes. Verify important information.

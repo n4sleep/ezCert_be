@@ -98,12 +98,13 @@ export default function App() {
           onGenerated={refresh}
         />
       )}
-      {phase === "exam" &&
-        (examId ? (
+      {examId ? (
+        <div className={phase === "exam" ? "" : "hidden"} aria-hidden={phase !== "exam"}>
           <ExamTaking
             examId={examId}
             onFinished={(id) => {
               setAttemptId(id);
+              setExamId(null);
               refresh();
               setPhase("review");
             }}
@@ -112,13 +113,14 @@ export default function App() {
               refresh();
             }}
           />
-        ) : (
-          <ExamListScreen
-            exams={exams}
-            onStartExam={startExam}
-            onGoChat={() => setPhase("chat")}
-          />
-        ))}
+        </div>
+      ) : phase === "exam" ? (
+        <ExamListScreen
+          exams={exams}
+          onStartExam={startExam}
+          onGoChat={() => setPhase("chat")}
+        />
+      ) : null}
       {phase === "review" && attemptId ? (
         <ExamResults attemptId={attemptId} onBack={() => setPhase("chat")} />
       ) : phase === "review" ? (

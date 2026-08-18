@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { request } from "../api/client";
 import type { AnswerResult, AttemptDto } from "../types";
 import { useToasts } from "../components/Toast";
@@ -10,16 +10,28 @@ interface Props {
   onAbandon: () => void;
 }
 
+function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
   const [attempt, setAttempt] = useState<AttemptDto | null>(null);
   const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selections, setSelections] = useState<Record<string, string[]>>({});
   const [revealed, setRevealed] = useState<Record<string, AnswerResult>>({});
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [confirmAbandon, setConfirmAbandon] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const autoSubmitted = useRef(false);
   const { push } = useToasts();
 
   useEffect(() => {
@@ -28,37 +40,78 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to start exam"));
   }, [examId]);
 
+  // Timer tick (drift-free: recompute from timestamps each second).
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const current = attempt?.questions[index];
   const isLast = attempt !== null && index === attempt.questions.length - 1;
   const isMulti = current?.type === "multi";
   const isCert = attempt?.mode === "certification";
-  const rev = current ? revealed[current.attemptQuestionId] : undefined;
   const progress = attempt ? Math.round(((index + 1) / attempt.questions.length) * 100) : 0;
-  const hasProgress = Object.keys(revealed).length > 0;
 
-  function requestBack() {
-    if (hasProgress) {
+  const startedAt = attempt ? Date.parse(attempt.startedAt) : 0;
+  const expiresAt = attempt?.expiresAt ? Date.parse(attempt.expiresAt) : null;
+  const elapsedSeconds = startedAt ? (now - startedAt) / 1000 : 0;
+  const remainingSeconds = expiresAt !== null ? (expiresAt - now) / 1000 : null;
+
+  const answeredCount = Object.values(selections).filter((s) => s.length > 0).length;
+
+  // Certification time-up: auto-submit and capture the review.
+  useEffect(() => {
+    if (!attempt || isCert !== true || expiresAt === null || autoSubmitted.current) return;
+    if (remainingSeconds !== null && remainingSeconds <= 0) {
+      autoSubmitted.current = true;
+      push("info", "Time's up — your exam was submitted");
+      void doSubmit();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remainingSeconds, attempt, isCert, expiresAt]);
+
+  function requestExit() {
+    if (answeredCount > 0) {
       setConfirmAbandon(true);
     } else {
       onAbandon();
     }
   }
 
+  function recordAnswer(questionId: string, selected: string[]) {
+    if (!attempt) return;
+    request(`/api/attempts/${attempt.attemptId}/answers`, {
+      method: "POST",
+      body: { attemptQuestionId: questionId, selected },
+    }).catch(() => push("error", "Couldn't save your answer — check your connection."));
+  }
+
   function toggle(choiceId: string) {
-    if (isMulti) {
-      setSelected((s) => (s.includes(choiceId) ? s.filter((c) => c !== choiceId) : [...s, choiceId]));
-    } else {
-      setSelected([choiceId]);
-    }
+    if (!current) return;
+    const qid = current.attemptQuestionId;
+    const prev = selections[qid] ?? [];
+    const next = isMulti
+      ? prev.includes(choiceId)
+        ? prev.filter((c) => c !== choiceId)
+        : [...prev, choiceId]
+      : [choiceId];
+    setSelections((s) => ({ ...s, [qid]: next }));
+    if (next.length > 0) recordAnswer(qid, next);
+    // A changed pick invalidates a previous reveal so the user can re-check.
+    setRevealed((r) => {
+      if (!r[qid]) return r;
+      const { [qid]: _drop, ...rest } = r;
+      return rest;
+    });
   }
 
   async function check() {
-    if (!current || checking) return;
+    if (!current || checking || isCert) return;
     setChecking(true);
     try {
       const res = await request<AnswerResult>(`/api/attempts/${attempt!.attemptId}/answers`, {
         method: "POST",
-        body: { attemptQuestionId: current.attemptQuestionId, selected },
+        body: { attemptQuestionId: current.attemptQuestionId, selected: selections[current.attemptQuestionId] ?? [] },
       });
       setRevealed((r) => ({ ...r, [current.attemptQuestionId]: res }));
     } catch (e) {
@@ -69,12 +122,10 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
   }
 
   function next() {
-    setSelected([]);
-    setIndex((i) => i + 1);
+    if (index < (attempt?.questions.length ?? 1) - 1) setIndex((i) => i + 1);
   }
 
   function previous() {
-    setSelected([]);
     setIndex((i) => Math.max(0, i - 1));
   }
 
@@ -89,6 +140,7 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
       push("error", e instanceof Error ? e.message : "Submit failed — your attempt is still in progress");
       setSubmitting(false);
       setConfirmSubmit(false);
+      autoSubmitted.current = false;
     }
   }
 
@@ -101,6 +153,11 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
   if (!attempt) return <div className="max-w-4xl mx-auto p-xl text-on-surface-variant">Loading exam…</div>;
   if (!current) return null;
 
+  const selected = selections[current.attemptQuestionId] ?? [];
+  const rev = revealed[current.attemptQuestionId];
+  const isAnswered = selected.length > 0;
+  const timeUp = remainingSeconds !== null && remainingSeconds <= 0;
+
   return (
     <div className="flex flex-col min-h-[calc(100vh-5rem)] py-xl px-md md:px-xxl gap-xl max-w-container-max mx-auto">
       {/* Top info bar */}
@@ -108,16 +165,32 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
         <div className="flex flex-col gap-xs">
           <button
             type="button"
-            className="w-fit inline-flex items-center gap-xs text-on-surface-variant hover:text-primary transition-colors mb-xs cursor-pointer"
-            onClick={requestBack}
+            className="w-fit inline-flex items-center gap-xs text-danger hover:opacity-80 transition-opacity mb-xs cursor-pointer"
+            onClick={requestExit}
           >
             <span>←</span>
-            <span className="text-label-md font-label-md">Back to exams</span>
+            <span className="text-label-md font-label-md">Exit exam</span>
           </button>
           <span className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Current Exam</span>
           <h1 className="font-headline-md text-headline-md text-on-surface">AZ-900 Cloud Concepts Practice</h1>
         </div>
-        <div className="flex items-center gap-xl">
+        <div className="flex items-center gap-xl flex-wrap">
+          <div
+            className={
+              "flex items-center gap-sm px-md py-sm rounded-full border " +
+              (remainingSeconds !== null && remainingSeconds < 60
+                ? "bg-danger-soft text-danger border-danger/40"
+                : "bg-surface-container-lowest text-on-surface border-outline-variant/30")
+            }
+          >
+            <span aria-hidden>⏱</span>
+            <span className="font-label-md text-label-md font-bold tabular-nums">
+              {remainingSeconds !== null ? formatClock(remainingSeconds) : formatClock(elapsedSeconds)}
+            </span>
+            <span className="font-label-caps text-[10px] uppercase tracking-wider opacity-70">
+              {remainingSeconds !== null ? "remaining" : "elapsed"}
+            </span>
+          </div>
           <div className="flex items-center gap-sm bg-surface-container-lowest px-md py-sm rounded-full border border-outline-variant/30">
             <span className="font-label-md text-label-md font-bold tabular-nums text-on-surface">
               Question {index + 1} of {attempt.questions.length}
@@ -140,7 +213,14 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
         <div className="bg-surface-container-lowest rounded-xl p-xl shadow-md w-full relative overflow-hidden">
           <div className="absolute -top-20 -right-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
           <div className="flex items-start gap-md mb-lg">
-            <div className="w-10 h-10 rounded-full bg-primary-container text-on-primary flex items-center justify-center flex-shrink-0 font-headline-md shadow-sm">
+            <div
+              className={
+                "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-headline-md shadow-sm " +
+                (isAnswered
+                  ? "bg-primary text-on-primary"
+                  : "bg-primary-container text-on-primary ring-1 ring-outline-variant/40")
+              }
+            >
               {index + 1}
             </div>
             <div className="flex flex-col gap-sm pt-xs">
@@ -153,13 +233,13 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
             {current.choices.map((c) => {
               const picked = selected.includes(c.label);
-              const revealedRes = rev?.isCorrect !== null && rev?.isCorrect !== undefined;
-              const isCorrectChoice = revealedRes ? rev?.correct?.includes(c.label) : undefined;
-              const isWrongPick = revealedRes ? rev && picked && !rev.correct?.includes(c.label) : undefined;
+              const showReveal = !isCert && rev?.isCorrect !== null && rev?.isCorrect !== undefined;
+              const isCorrectChoice = showReveal ? rev?.correct?.includes(c.label) : undefined;
+              const isWrongPick = showReveal ? rev && picked && !rev.correct?.includes(c.label) : undefined;
 
               let cls = "flex items-center p-md rounded-xl shadow-sm transition-all duration-200 w-full text-left ";
               let labelCls = "w-8 h-8 rounded-full border-2 border-outline flex items-center justify-center font-label-md text-on-surface-variant mr-md ";
-              if (revealedRes) {
+              if (showReveal) {
                 if (isCorrectChoice) {
                   cls += "bg-success-soft ring-2 ring-success-strong shadow-[0_8px_20px_rgba(16,185,129,0.15)]";
                   labelCls = "w-8 h-8 rounded-full bg-success-strong text-white flex items-center justify-center font-label-md mr-md shadow-sm ";
@@ -181,20 +261,18 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
                   key={c.label}
                   className={cls}
                   onClick={() => toggle(c.label)}
-                  disabled={!!rev}
                   aria-pressed={picked}
-                  title={rev ? "Locked after checking" : undefined}
                 >
                   <div className={labelCls}>{c.label}</div>
                   <span className={"font-body-lg flex-grow " + (picked ? "font-semibold" : "")}>{c.text}</span>
-                  {picked && !rev && <span className="text-primary">●</span>}
+                  {picked && !showReveal && <span className="text-primary">●</span>}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {rev && !isCert && (
+        {!isCert && rev && (
           <div
             className={
               "rounded-xl p-lg " +
@@ -211,15 +289,15 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
           </div>
         )}
 
-        {rev && isCert && (
+        {isCert && isAnswered && !rev && (
           <div className="rounded-xl p-lg bg-surface-container border border-outline-variant/30 text-on-surface-variant">
-            <h4 className="font-label-md font-bold mb-sm">Answer recorded</h4>
+            <h4 className="font-label-md font-bold mb-sm">Answer saved</h4>
             <p className="font-body-sm">Correctness and explanations are revealed after you submit the exam.</p>
           </div>
         )}
       </div>
 
-      {/* Footer nav */}
+      {/* Footer nav — always free in both modes */}
       <div className="mt-auto pt-xl flex flex-col sm:flex-row justify-between items-center gap-md max-w-4xl mx-auto w-full pb-xl">
         <div className="flex gap-md w-full sm:w-auto justify-between sm:justify-start">
           <button
@@ -229,30 +307,33 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
           >
             ← Previous
           </button>
-          {!rev && (
+          {!isCert && !rev && (
             <button
               className="flex items-center justify-center px-lg py-md rounded-lg bg-surface-container-high font-label-md text-on-surface min-w-[120px] disabled:opacity-50"
               onClick={check}
-              disabled={selected.length === 0 || checking}
+              disabled={!isAnswered || checking}
               aria-busy={checking}
             >
               {checking ? "Checking…" : "Check answer"}
             </button>
           )}
         </div>
-        {rev &&
-          (isLast ? (
-            <button
-              className="w-full sm:w-auto flex items-center justify-center px-xl py-md rounded-lg bg-success text-white font-label-md shadow-md hover:bg-[#059669] transition-all"
-              onClick={() => setConfirmSubmit(true)}
-            >
-              Submit Exam →
-            </button>
-          ) : (
-            <button className="w-full sm:w-auto flex items-center justify-center px-xl py-md rounded-lg bg-primary text-on-primary font-label-md shadow-md" onClick={next}>
-              Next →
-            </button>
-          ))}
+        {isLast ? (
+          <button
+            className="w-full sm:w-auto flex items-center justify-center px-xl py-md rounded-lg bg-success text-white font-label-md shadow-md hover:bg-[#059669] transition-all disabled:opacity-50"
+            onClick={() => setConfirmSubmit(true)}
+            disabled={submitting}
+          >
+            Submit Exam →
+          </button>
+        ) : (
+          <button
+            className="w-full sm:w-auto flex items-center justify-center px-xl py-md rounded-lg bg-primary text-on-primary font-label-md shadow-md disabled:opacity-50"
+            onClick={next}
+          >
+            Next →
+          </button>
+        )}
       </div>
 
       {confirmSubmit && (
@@ -268,9 +349,9 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
 
       {confirmAbandon && (
         <ConfirmDialog
-          title="Abandon exam?"
+          title="Exit exam?"
           body="This attempt won't be saved and won't appear in your results. You can start the exam again anytime."
-          confirmLabel="Abandon"
+          confirmLabel="Exit"
           busy={false}
           onConfirm={() => {
             setConfirmAbandon(false);
@@ -279,6 +360,8 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
           onCancel={() => setConfirmAbandon(false)}
         />
       )}
+
+      {timeUp && <div className="sr-only" role="status">Time's up — submitting your exam.</div>}
     </div>
   );
 }
