@@ -36,12 +36,12 @@ export default function ExamListScreen({ exams, onStartExam, onGoChat }: Props) 
         <p className="text-body-md font-body-md text-on-surface-variant mt-xs">Pick any exam to start or restart it.</p>
       </div>
       {exams.map((e) => (
-        <div key={e.examId} className="bg-surface shadow-sm rounded-xl overflow-hidden transition-shadow hover:shadow-md">
+        <div key={e.examId} className={"bg-surface shadow-sm rounded-xl overflow-hidden transition-shadow " + (e.expired ? "opacity-60" : "hover:shadow-md")}>
           <div className="p-lg md:p-xl flex flex-col sm:flex-row sm:items-center gap-md">
             <div className="flex-1">
               <div className="flex items-center gap-sm mb-xs">
                 <span className="bg-secondary-fixed/50 text-on-secondary-fixed px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider">
-                  {e.status}
+                  {e.expired ? "Expired" : e.status}
                 </span>
                 <span className="text-label-caps text-on-surface-variant">{e.mode}</span>
               </div>
@@ -51,8 +51,9 @@ export default function ExamListScreen({ exams, onStartExam, onGoChat }: Props) 
               </p>
             </div>
             <button
-              className="shrink-0 bg-primary text-on-primary font-label-md py-md px-lg rounded-lg shadow-[0_4px_14px_rgba(53,37,205,0.2)] hover:-translate-y-0.5 transition-transform"
+              className="shrink-0 bg-primary text-on-primary font-label-md py-md px-lg rounded-lg shadow-[0_4px_14px_rgba(53,37,205,0.2)] hover:-translate-y-0.5 transition-transform disabled:opacity-50 disabled:hover:translate-y-0"
               onClick={() => onStartExam(e.examId)}
+              disabled={e.expired}
             >
               Start exam →
             </button>

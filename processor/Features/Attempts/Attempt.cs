@@ -29,6 +29,7 @@ public class AttemptQuestion
     public Guid? SourceQuestionId { get; set; }
     public int Ordinal { get; set; }
     public string Section { get; set; } = "";
+    public string Topic { get; set; } = "";
     public string QuestionJson { get; set; } = "";    // { type, text }
     public string ChoicesJson { get; set; } = "";     // [{label,text}]
     public string CorrectJson { get; set; } = "";     // ["a","b"]

@@ -49,13 +49,20 @@ public static class AttemptEndpoints
                 {
                     SourceQuestionId = q.Id,
                     Ordinal = q.Ordinal,
-                    Section = q.Ordinal < 4 ? "cloud-concepts" : "service-types",
+                    Section = string.IsNullOrWhiteSpace(q.Section) ? "general" : q.Section,
+                    Topic = q.Topic,
                     QuestionJson = JsonSerializer.Serialize(new { type = q.Type, text = q.Text }, Json),
                     ChoicesJson = JsonSerializer.Serialize(q.Choices.OrderBy(c => c.Ordinal)
                         .Select(c => new { label = c.Label, text = c.Text }).ToList(), Json),
                     CorrectJson = JsonSerializer.Serialize(q.Choices.Where(c => c.IsCorrect).Select(c => c.Label).ToList(), Json),
                     Explanation = q.Explanation,
-                    CitationJson = JsonSerializer.Serialize(q.Citations.Select(c => c.SourceUrl).ToList(), Json),
+                    CitationJson = JsonSerializer.Serialize(q.Citations.Select(c => new CitationSnapshot
+                    {
+                        url = c.SourceUrl,
+                        title = c.SourceTitle,
+                        section = c.Section,
+                        quotedText = c.QuotedText,
+                    }).ToList(), Json),
                 });
             }
             attempt.TotalQuestions = attempt.Questions.Count;
@@ -115,7 +122,7 @@ public static class AttemptEndpoints
                 return Results.Ok(new AnswerDto(aq.Id, null, null, null, null));
 
             return Results.Ok(new AnswerDto(aq.Id, isCorrect, correct.ToArray(), aq.Explanation,
-                JsonSerializer.Deserialize<List<string>>(aq.CitationJson, Json)?.FirstOrDefault()));
+                ParseCitationSources(aq.CitationJson).FirstOrDefault()));
         });
 
         // Submit: score from snapshots; expired mid-attempt still auto-scores (AD-5).
@@ -199,6 +206,43 @@ public static class AttemptEndpoints
         return app;
     }
 
+    private sealed record CitationSnapshot
+    {
+        public string? url { get; init; }
+        public string? title { get; init; }
+        public string? section { get; init; }
+        public string? quotedText { get; init; }
+    }
+
+    // Source URLs from the attempt snapshot. Handles both the current metadata
+    // shape and legacy string-list snapshots created before the WS-2 migration.
+    private static List<string> ParseCitationSources(string citationJson)
+    {
+        return ParseCitations(citationJson).Select(c => c.url).Where(u => !string.IsNullOrWhiteSpace(u)).Select(u => u!).ToList();
+    }
+
+    private static List<CitationSnapshot> ParseCitations(string citationJson)
+    {
+        try
+        {
+            var list = JsonSerializer.Deserialize<List<CitationSnapshot>>(citationJson, Json);
+            if (list is not null) return list;
+        }
+        catch (JsonException)
+        {
+            // fall through to the legacy shape
+        }
+        try
+        {
+            var legacy = JsonSerializer.Deserialize<List<string>>(citationJson, Json);
+            return legacy?.Select(u => new CitationSnapshot { url = u }).ToList() ?? new();
+        }
+        catch (JsonException)
+        {
+            return new();
+        }
+    }
+
     private static object BuildReport(Attempt a, bool expired)
     {
         var review = a.Questions.OrderBy(q => q.Ordinal).Select(q =>
@@ -206,6 +250,7 @@ public static class AttemptEndpoints
             var qj = JsonDocument.Parse(q.QuestionJson).RootElement;
             var selected = q.Answer is null ? new List<string>() : JsonSerializer.Deserialize<List<string>>(q.Answer.SelectedJson, Json) ?? new();
             var correct = JsonSerializer.Deserialize<List<string>>(q.CorrectJson, Json) ?? new();
+            var citation = ParseCitations(q.CitationJson).FirstOrDefault();
             return new
             {
                 ordinal = q.Ordinal,
@@ -214,7 +259,10 @@ public static class AttemptEndpoints
                 correct,
                 isCorrect = q.Answer?.IsCorrect ?? false,
                 explanation = q.Explanation,
-                source = JsonSerializer.Deserialize<List<string>>(q.CitationJson, Json)?.FirstOrDefault(),
+                source = citation?.url,
+                sourceTitle = citation?.title,
+                sourceSection = citation?.section,
+                quotedText = citation?.quotedText,
             };
         }).ToList();
 

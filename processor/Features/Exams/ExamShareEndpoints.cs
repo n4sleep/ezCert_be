@@ -16,6 +16,7 @@ public static class ExamShareEndpoints
         app.MapGet("/api/exams", async (EzCertDbContext db, HttpContext ctx) =>
         {
             var device = GuestIdentity.GetOrCreateDeviceId(ctx);
+            var now = DateTime.UtcNow;
             var rows = await db.Exams
                 .Where(e => e.OwnerDeviceId == device)
                 .OrderByDescending(e => e.CreatedAt)
@@ -27,6 +28,9 @@ public static class ExamShareEndpoints
                     mode = e.Mode,
                     difficulty = e.Difficulty,
                     status = e.Status,
+                    // Computed lifecycle (WS-6): status values stay as-is; expiry
+                    // is derived from ExpiresAt. Archived = reserved for future.
+                    expired = e.Status == "ready" && e.ExpiresAt < now,
                     questionCount = e.Questions.Count,
                     expiresAt = e.ExpiresAt,
                     createdAt = e.CreatedAt,

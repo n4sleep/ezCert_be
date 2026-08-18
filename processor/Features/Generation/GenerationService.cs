@@ -209,10 +209,16 @@ public class GenerationService
             };
 
             var ord = 0;
+            var seenTexts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var q in qs.EnumerateArray())
             {
                 if (!q.TryGetProperty("text", out var qText) || string.IsNullOrWhiteSpace(qText.GetString()))
                     return null;
+                var text = qText.GetString()!.Trim();
+                if (text.Length < 10 || text.Length > 1000)
+                    return null; // unreasonable question length
+                if (!seenTexts.Add(NormalizeForDedupe(text)))
+                    return null; // duplicate question
                 if (!q.TryGetProperty("choices", out var choices) || choices.GetArrayLength() < 2)
                     return null;
                 if (!q.TryGetProperty("correct", out var correct) || correct.GetArrayLength() == 0)
@@ -226,29 +232,41 @@ public class GenerationService
                     if (!c.TryGetProperty("label", out var lab) || !c.TryGetProperty("text", out var cText))
                         return null;
                     var label = lab.GetString()?.Trim() ?? "";
+                    var choiceText = cText.GetString()?.Trim() ?? "";
                     if (string.IsNullOrWhiteSpace(label) || !labels.Add(label))
                         return null;
+                    if (string.IsNullOrWhiteSpace(choiceText))
+                        return null; // empty choice text
                     choiceList.Add(new Choice
                     {
                         Label = label,
-                        Text = cText.GetString() ?? "",
+                        Text = choiceText,
                         IsCorrect = correct.EnumerateArray().Any(x => x.GetString() == label),
                         Ordinal = cOrd++,
                     });
                 }
-                if (choiceList.Count(c => c.IsCorrect) == 0)
-                    return null;
 
                 var type = q.TryGetProperty("type", out var ty) ? ty.GetString() : null;
-                if (type is null or not ("single" or "multi" or "truefalse"))
-                    type = choiceList.Count(c => c.IsCorrect) > 1 ? "multi" : "single";
+                if (type is not null and not ("single" or "multi" or "truefalse"))
+                    return null; // invalid type -> reject, never silently repair
+                type ??= choiceList.Count(c => c.IsCorrect) > 1 ? "multi" : "single";
+
+                // Type-consistency rules (WS-5): exact correct-answer counts.
+                var correctCount = choiceList.Count(c => c.IsCorrect);
+                if (type == "single" && correctCount != 1) return null;
+                if (type == "truefalse" && (choiceList.Count != 2 || correctCount != 1)) return null;
+                if (type == "multi" && correctCount < 2) return null;
+
+                var explanation = q.TryGetProperty("explanation", out var ex) ? ex.GetString()?.Trim() ?? "" : "";
+                if (explanation.Length < 20)
+                    return null; // non-empty, substantive explanation required
 
                 var question = new Question
                 {
                     Ordinal = ord++,
                     Type = type,
-                    Text = qText.GetString()!,
-                    Explanation = q.TryGetProperty("explanation", out var ex) ? ex.GetString() ?? "" : "",
+                    Text = text,
+                    Explanation = explanation,
                     Section = q.TryGetProperty("section", out var sec) && !string.IsNullOrWhiteSpace(sec.GetString())
                         ? sec.GetString()!
                         : evidence.FirstOrDefault()?.Section ?? "general",
@@ -305,6 +323,11 @@ public class GenerationService
         return m.Success ? m.Groups[1].Value.Trim() : raw.Trim();
     }
 
+    private static string NormalizeForDedupe(string text)
+    {
+        return Regex.Replace(text.ToLowerInvariant().Trim(), @"\s+", " ");
+    }
+
     private static string DetectCert(string prompt)
     {
         var m = Regex.Match(prompt, @"\b(AZ-900|CLF-C02|AI-900|DP-900)\b", RegexOptions.IgnoreCase);
@@ -318,12 +341,15 @@ public class GenerationService
         return "medium";
     }
 
+    private static readonly JsonSerializerOptions ConfigJson = new(JsonSerializerDefaults.Web);
+
     private static GenerationConfig ParseConfig(string? configJson)
     {
         if (string.IsNullOrWhiteSpace(configJson)) return new GenerationConfig();
         try
         {
-            return JsonSerializer.Deserialize<GenerationConfig>(configJson) ?? new GenerationConfig();
+            // Web defaults: camelCase JSON matching the PascalCase properties.
+            return JsonSerializer.Deserialize<GenerationConfig>(configJson, ConfigJson) ?? new GenerationConfig();
         }
         catch (JsonException)
         {

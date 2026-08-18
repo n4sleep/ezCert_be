@@ -69,6 +69,7 @@ export interface ExamSummary {
   mode: string;
   difficulty: string;
   status: string;
+  expired: boolean;
   questionCount: number;
   expiresAt: string;
   createdAt: string;
