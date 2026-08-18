@@ -146,22 +146,19 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
             >
               <div className="flex justify-between items-start mb-xs">
                 <h4 className="font-label-md text-label-md text-on-surface">{e.title}</h4>
-                <span className="flex items-center gap-xs">
-                  <button
-                    type="button"
-                    className="text-on-surface-variant hover:text-primary transition-colors text-sm leading-none"
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                      share(e.examId);
-                    }}
-                    disabled={sharingId === e.examId}
-                    aria-label="Share exam"
-                    title="Share exam"
-                  >
-                    {sharingId === e.examId ? "…" : "⤴"}
-                  </button>
-                  <span className="bg-surface-variant text-on-surface-variant text-[10px] px-2 py-0.5 rounded-full">{e.status}</span>
-                </span>
+                <button
+                  type="button"
+                  className="shrink-0 w-8 h-8 grid place-items-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors text-lg leading-none"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    share(e.examId);
+                  }}
+                  disabled={sharingId === e.examId}
+                  aria-label="Share exam"
+                  title="Share exam"
+                >
+                  {sharingId === e.examId ? "…" : "⤴"}
+                </button>
               </div>
               <p className="font-body-sm text-[12px] text-on-surface-variant">{e.questionCount} Qs • {e.mode}</p>
             </div>
