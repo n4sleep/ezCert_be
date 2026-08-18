@@ -57,7 +57,7 @@ function ExamCard({ exam: e, onStartExam }: { exam: ExamSummary; onStartExam: Pr
             <span className="bg-secondary-fixed/50 text-on-secondary-fixed px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider">
               {e.expired ? "Expired" : e.status}
             </span>
-            <span className="text-label-caps text-on-surface-variant">{e.mode}</span>
+            <span className="text-label-caps text-on-surface-variant">{e.mode === "certification" ? "Mock" : "Practice"}</span>
           </div>
           <h3 className="font-headline-md text-headline-md text-on-surface">{e.title}</h3>
           <p className="text-body-sm text-on-surface-variant mt-xs">
@@ -76,7 +76,7 @@ function ExamCard({ exam: e, onStartExam }: { exam: ExamSummary; onStartExam: Pr
                 }
                 onClick={() => setMode(m)}
               >
-                {m === "practice" ? "Practice" : "Certification"}
+                {m === "practice" ? "Practice" : "Mock"}
               </button>
             ))}
           </div>

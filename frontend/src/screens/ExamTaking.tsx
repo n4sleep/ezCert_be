@@ -290,13 +290,6 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
             )}
           </div>
         )}
-
-        {isCert && isAnswered && !rev && (
-          <div className="rounded-xl p-lg bg-surface-container border border-outline-variant/30 text-on-surface-variant">
-            <h4 className="font-label-md font-bold mb-sm">Answer saved</h4>
-            <p className="font-body-sm">Correctness and explanations are revealed after you submit the exam.</p>
-          </div>
-        )}
       </div>
 
       {/* Footer nav — always free in both modes */}

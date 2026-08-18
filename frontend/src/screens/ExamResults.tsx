@@ -46,7 +46,7 @@ export default function ExamResults({ attemptId, onBack }: Props) {
           onClick={onBack}
         >
           <span>←</span>
-          <span className="text-label-md font-label-md">Back to Chat</span>
+          <span className="text-label-md font-label-md">Back to history</span>
         </button>
       </div>
 

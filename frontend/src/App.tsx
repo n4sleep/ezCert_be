@@ -127,7 +127,7 @@ export default function App() {
         />
       ) : null}
       {phase === "review" && attemptId ? (
-        <ExamResults attemptId={attemptId} onBack={() => setPhase("chat")} />
+        <ExamResults attemptId={attemptId} onBack={() => setAttemptId(null)} />
       ) : phase === "review" ? (
         <ReviewListScreen
           attempts={attempts}

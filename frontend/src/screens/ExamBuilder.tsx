@@ -165,7 +165,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
                   {sharingId === e.examId ? "…" : "⤴"}
                 </button>
               </div>
-              <p className="font-body-sm text-[12px] text-on-surface-variant">{e.questionCount} Qs • {e.mode}</p>
+              <p className="font-body-sm text-[12px] text-on-surface-variant">{e.questionCount} Qs • {e.mode === "certification" ? "Mock" : "Practice"}</p>
             </div>
           ))}
         </div>
@@ -263,7 +263,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
                               }
                               onClick={() => setCardModes((cm) => ({ ...cm, [item.examId!]: m }))}
                             >
-                              {m === "practice" ? "Practice" : "Certification"}
+                              {m === "practice" ? "Practice" : "Mock"}
                             </button>
                           ))}
                         </div>
