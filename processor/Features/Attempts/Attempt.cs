@@ -7,6 +7,7 @@ public class Attempt
     public Guid ExamId { get; set; }
     public Exams.Exam? Exam { get; set; }
     public string DeviceId { get; set; } = "";
+    public string Mode { get; set; } = "practice";  // practice | certification — chosen at attempt start
     public string Status { get; set; } = "in_progress"; // in_progress | submitted | expired
     public DateTime StartedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ExpiresAt { get; set; }

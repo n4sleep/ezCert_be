@@ -13,6 +13,7 @@ type Phase = "chat" | "exam" | "review";
 export default function App() {
   const [phase, setPhase] = useState<Phase>("chat");
   const [examId, setExamId] = useState<string | null>(null);
+  const [examMode, setExamMode] = useState<"practice" | "certification" | undefined>(undefined);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [linkError, setLinkError] = useState("");
   const [exams, setExams] = useState<ExamSummary[]>([]);
@@ -54,7 +55,8 @@ export default function App() {
       .catch((e) => setLinkError(e instanceof Error ? e.message : "This exam is unavailable."));
   }, [refresh]);
 
-  function startExam(id: string) {
+  function startExam(id: string, mode: "practice" | "certification") {
+    setExamMode(mode);
     setExamId(id);
     setPhase("exam");
   }
@@ -102,14 +104,17 @@ export default function App() {
         <div className={phase === "exam" ? "" : "hidden"} aria-hidden={phase !== "exam"}>
           <ExamTaking
             examId={examId}
+            attemptMode={examMode}
             onFinished={(id) => {
               setAttemptId(id);
               setExamId(null);
+              setExamMode(undefined);
               refresh();
               setPhase("review");
             }}
             onAbandon={() => {
               setExamId(null);
+              setExamMode(undefined);
               refresh();
             }}
           />

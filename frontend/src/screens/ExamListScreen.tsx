@@ -1,12 +1,14 @@
+import { useState } from "react";
 import type { ExamSummary } from "../types";
 
 interface Props {
   exams: ExamSummary[];
-  onStartExam: (examId: string) => void;
+  onStartExam: (examId: string, mode: "practice" | "certification") => void;
   onGoChat: () => void;
 }
 
 // Exam tab: list of this device's persisted exams (newest first).
+// Mode (practice | certification) is chosen per attempt here.
 // Empty state: "Tell us what's on your mind" (EXPERIENCE.md State Patterns).
 export default function ExamListScreen({ exams, onStartExam, onGoChat }: Props) {
   if (exams.length === 0) {
@@ -36,30 +38,57 @@ export default function ExamListScreen({ exams, onStartExam, onGoChat }: Props) 
         <p className="text-body-md font-body-md text-on-surface-variant mt-xs">Pick any exam to start or restart it.</p>
       </div>
       {exams.map((e) => (
-        <div key={e.examId} className={"bg-surface shadow-sm rounded-xl overflow-hidden transition-shadow " + (e.expired ? "opacity-60" : "hover:shadow-md")}>
-          <div className="p-lg md:p-xl flex flex-col sm:flex-row sm:items-center gap-md">
-            <div className="flex-1">
-              <div className="flex items-center gap-sm mb-xs">
-                <span className="bg-secondary-fixed/50 text-on-secondary-fixed px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider">
-                  {e.expired ? "Expired" : e.status}
-                </span>
-                <span className="text-label-caps text-on-surface-variant">{e.mode}</span>
-              </div>
-              <h3 className="font-headline-md text-headline-md text-on-surface">{e.title}</h3>
-              <p className="text-body-sm text-on-surface-variant mt-xs">
-                {e.questionCount} questions · {e.difficulty}
-              </p>
-            </div>
-            <button
-              className="shrink-0 bg-primary text-on-primary font-label-md py-md px-lg rounded-lg shadow-[0_4px_14px_rgba(53,37,205,0.2)] hover:-translate-y-0.5 transition-transform disabled:opacity-50 disabled:hover:translate-y-0"
-              onClick={() => onStartExam(e.examId)}
-              disabled={e.expired}
-            >
-              Start exam →
-            </button>
-          </div>
-        </div>
+        <ExamCard key={e.examId} exam={e} onStartExam={onStartExam} />
       ))}
+    </div>
+  );
+}
+
+function ExamCard({ exam: e, onStartExam }: { exam: ExamSummary; onStartExam: Props["onStartExam"] }) {
+  const [mode, setMode] = useState<"practice" | "certification">(
+    e.mode === "certification" ? "certification" : "practice"
+  );
+
+  return (
+    <div className={"bg-surface shadow-sm rounded-xl overflow-hidden transition-shadow " + (e.expired ? "opacity-60" : "hover:shadow-md")}>
+      <div className="p-lg md:p-xl flex flex-col gap-md">
+        <div className="flex-1">
+          <div className="flex items-center gap-sm mb-xs">
+            <span className="bg-secondary-fixed/50 text-on-secondary-fixed px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider">
+              {e.expired ? "Expired" : e.status}
+            </span>
+            <span className="text-label-caps text-on-surface-variant">{e.mode}</span>
+          </div>
+          <h3 className="font-headline-md text-headline-md text-on-surface">{e.title}</h3>
+          <p className="text-body-sm text-on-surface-variant mt-xs">
+            {e.questionCount} questions · {e.difficulty}
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-md sm:justify-between">
+          <div className="inline-flex items-center gap-xs bg-surface-container-lowest border border-outline-variant/30 rounded-full p-1 w-fit" role="group" aria-label="Exam mode">
+            {(["practice", "certification"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={
+                  "px-md py-xs rounded-full font-label-md transition-colors cursor-pointer " +
+                  (mode === m ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-primary")
+                }
+                onClick={() => setMode(m)}
+              >
+                {m === "practice" ? "Practice" : "Certification"}
+              </button>
+            ))}
+          </div>
+          <button
+            className="shrink-0 bg-primary text-on-primary font-label-md py-md px-lg rounded-lg shadow-[0_4px_14px_rgba(53,37,205,0.2)] hover:-translate-y-0.5 transition-transform disabled:opacity-50 disabled:hover:translate-y-0"
+            onClick={() => onStartExam(e.examId, mode)}
+            disabled={e.expired}
+          >
+            Start exam →
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

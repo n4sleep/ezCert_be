@@ -6,6 +6,7 @@ import ConfirmDialog from "../components/ConfirmDialog";
 
 interface Props {
   examId: string;
+  attemptMode?: "practice" | "certification";
   onFinished: (attemptId: string) => void;
   onAbandon: () => void;
 }
@@ -20,7 +21,7 @@ function formatClock(totalSeconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
+export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon }: Props) {
   const [attempt, setAttempt] = useState<AttemptDto | null>(null);
   const [index, setIndex] = useState(0);
   const [selections, setSelections] = useState<Record<string, string[]>>({});
@@ -35,10 +36,11 @@ export default function ExamTaking({ examId, onFinished, onAbandon }: Props) {
   const { push } = useToasts();
 
   useEffect(() => {
-    request<AttemptDto>(`/api/exams/${examId}/attempts`, { method: "POST" })
+    const qs = attemptMode ? `?mode=${attemptMode}` : "";
+    request<AttemptDto>(`/api/exams/${examId}/attempts${qs}`, { method: "POST" })
       .then(setAttempt)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to start exam"));
-  }, [examId]);
+  }, [examId, attemptMode]);
 
   // Timer tick (drift-free: recompute from timestamps each second).
   useEffect(() => {

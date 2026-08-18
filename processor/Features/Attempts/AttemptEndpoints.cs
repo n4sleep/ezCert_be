@@ -17,8 +17,9 @@ public static class AttemptEndpoints
 
     public static IEndpointRouteBuilder MapAttemptEndpoints(this IEndpointRouteBuilder app)
     {
-        // Start an attempt on a ready exam.
-        app.MapPost("/api/exams/{examId:guid}/attempts", async (Guid examId, EzCertDbContext db, HttpContext ctx) =>
+        // Start an attempt on a ready exam. Mode is chosen per attempt
+        // (practice | certification); default = the exam's mode.
+        app.MapPost("/api/exams/{examId:guid}/attempts", async (Guid examId, EzCertDbContext db, HttpContext ctx, string? mode) =>
         {
             var device = GuestIdentity.GetOrCreateDeviceId(ctx);
             var exam = await db.Exams
@@ -29,18 +30,21 @@ public static class AttemptEndpoints
             if (exam.Status != "ready") return Results.Conflict(new { error = $"Exam is {exam.Status}." });
             if (exam.ExpiresAt < DateTime.UtcNow) return Results.Conflict(new { error = "This exam has expired." });
 
+            var attemptMode = mode == "certification" ? "certification" : mode == "practice" ? "practice" : exam.Mode;
+
             var attempt = new Attempt
             {
                 ExamId = exam.Id,
                 DeviceId = device,
+                Mode = attemptMode,
                 Status = "in_progress",
-                ExpiresAt = exam.Mode == "certification" ? DateTime.UtcNow.AddMinutes(exam.DurationMinutes) : null,
+                ExpiresAt = attemptMode == "certification" ? DateTime.UtcNow.AddMinutes(exam.DurationMinutes) : null,
             };
 
             // Certification sessions get a randomized per-session question order
             // (4-6): shuffle the snapshot order so no two attempts look alike.
             var questionOrder = exam.Questions.OrderBy(q => q.Ordinal).ToList();
-            if (exam.Mode == "certification")
+            if (attemptMode == "certification")
                 questionOrder = questionOrder.OrderBy(_ => Random.Shared.Next()).ToList();
 
             foreach (var q in questionOrder)
@@ -74,7 +78,7 @@ public static class AttemptEndpoints
             {
                 attemptId = attempt.Id,
                 status = attempt.Status,
-                mode = exam.Mode,
+                mode = attempt.Mode,
                 startedAt = attempt.StartedAt,
                 expiresAt = attempt.ExpiresAt,
                 questions = attempt.Questions.OrderBy(q => q.Ordinal).Select(q => new
@@ -119,7 +123,7 @@ public static class AttemptEndpoints
             }
             await db.SaveChangesAsync();
 
-            if (attempt.Exam?.Mode == "certification")
+            if (attempt.Mode == "certification")
                 return Results.Ok(new AnswerDto(aq.Id, null, null, null, null));
 
             return Results.Ok(new AnswerDto(aq.Id, isCorrect, correct.ToArray(), aq.Explanation,

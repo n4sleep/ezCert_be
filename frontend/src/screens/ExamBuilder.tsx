@@ -5,7 +5,7 @@ import { useToasts } from "../components/Toast";
 
 interface Props {
   exams: ExamSummary[];
-  onStartExam: (examId: string) => void;
+  onStartExam: (examId: string, mode: "practice" | "certification") => void;
   onGenerated: () => void;
 }
 
@@ -21,13 +21,13 @@ let nextId = 1;
 export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [mode, setMode] = useState<"practice" | "certification">("practice");
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
   const [shareFor, setShareFor] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
+  const [cardModes, setCardModes] = useState<Record<string, "practice" | "certification">>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const { push } = useToasts();
@@ -78,11 +78,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
     setFeed((f) => [...f, { id: nextId++, kind: "user", text }]);
 
     try {
-      const configJson = mode === "certification" ? JSON.stringify({ mode: "certification" }) : undefined;
-      const created = await request<{ jobId: string }>("/api/exam-jobs", {
-        method: "POST",
-        body: configJson ? { prompt: text, configJson } : { prompt: text },
-      });
+      const created = await request<{ jobId: string }>("/api/exam-jobs", { method: "POST", body: { prompt: text } });
       const job = await pollJob(created.jobId);
       if (job.status === "completed" && job.examId) {
         setPrompt("");
@@ -123,6 +119,10 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
     completed: "Finalizing…",
   };
 
+  function defaultCardMode(summary: ExamSummary | undefined): "practice" | "certification" {
+    return summary?.mode === "certification" ? "certification" : "practice";
+  }
+
   return (
     <div className="flex h-[calc(100vh-5rem)]">
       {/* Left sidebar: Recent Exams */}
@@ -147,7 +147,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
             <div
               key={e.examId}
               className="block w-full text-left p-md rounded-xl bg-surface hover:bg-surface-container transition-colors cursor-pointer"
-              onClick={() => onStartExam(e.examId)}
+              onClick={() => onStartExam(e.examId, e.mode === "certification" ? "certification" : "practice")}
             >
               <div className="flex justify-between items-start mb-xs">
                 <h4 className="font-label-md text-label-md text-on-surface">{e.title}</h4>
@@ -249,10 +249,29 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
                         </div>
                       </div>
                       <p className="text-[12px] text-on-surface-variant/70 mb-lg">Available for 3 days · expires soon</p>
+                      <div className="flex items-center justify-center gap-xs mb-md">
+                        <div className="inline-flex items-center gap-xs bg-surface border border-outline-variant/30 rounded-full p-1" role="group" aria-label="Exam mode">
+                          {(["practice", "certification"] as const).map((m) => (
+                            <button
+                              key={m}
+                              type="button"
+                              className={
+                                "px-md py-xs rounded-full font-label-md transition-colors cursor-pointer " +
+                                ((cardModes[item.examId!] ?? defaultCardMode(summary)) === m
+                                  ? "bg-primary text-on-primary"
+                                  : "text-on-surface-variant hover:text-primary")
+                              }
+                              onClick={() => setCardModes((cm) => ({ ...cm, [item.examId!]: m }))}
+                            >
+                              {m === "practice" ? "Practice" : "Certification"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                       <div className="flex gap-md">
                         <button
                           className="flex-1 bg-primary text-on-primary font-label-md py-4 rounded-xl flex items-center justify-center gap-2 shadow-[0_4px_14px_rgba(53,37,205,0.2)] hover:-translate-y-1 transition-transform duration-300"
-                          onClick={() => onStartExam(item.examId!)}
+                          onClick={() => onStartExam(item.examId!, cardModes[item.examId!] ?? defaultCardMode(summary))}
                         >
                           <span className="font-bold tracking-wide">Start exam</span>
                           <span>→</span>
@@ -311,23 +330,6 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
                   <span className="text-[20px] -rotate-45 ml-1">➤</span>
                 )}
               </button>
-            </div>
-            <div className="flex items-center justify-center gap-sm mt-3">
-              <div className="inline-flex items-center gap-xs bg-surface-container-lowest border border-outline-variant/30 rounded-full p-1" role="group" aria-label="Exam mode">
-                {(["practice", "certification"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    className={
-                      "px-md py-xs rounded-full font-label-md transition-colors cursor-pointer " +
-                      (mode === m ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-primary")
-                    }
-                    onClick={() => setMode(m)}
-                  >
-                    {m === "practice" ? "Practice" : "Certification"}
-                  </button>
-                ))}
-              </div>
             </div>
             <p className="text-center font-body-sm text-[11px] text-on-surface-variant/60 mt-3">
               ExamGenius can make mistakes. Verify important information.
