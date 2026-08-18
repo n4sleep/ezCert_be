@@ -22,6 +22,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<string | null>(null);
   const [shareFor, setShareFor] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
@@ -72,11 +73,8 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
     const text = prompt.trim();
     if (!text || busy) return;
     setBusy(true);
-    setFeed((f) => [
-      ...f,
-      { id: nextId++, kind: "user", text },
-      { id: nextId++, kind: "bot", text: "Đã hiểu! Mình đang tạo bộ đề thi thử cho bạn. Dưới đây là bài thi của bạn:" },
-    ]);
+    setStage(null);
+    setFeed((f) => [...f, { id: nextId++, kind: "user", text }]);
 
     try {
       const created = await request<{ jobId: string }>("/api/exam-jobs", { method: "POST", body: { prompt: text } });
@@ -96,6 +94,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
       push("error", "Can't reach the practice server");
     } finally {
       setBusy(false);
+      setStage(null);
     }
   }
 
@@ -104,10 +103,20 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
     for (let i = 0; i < 180; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       const job = await request<ExamJobStatus>(`/api/exam-jobs/${jobId}`);
+      setStage(job.stage);
       if (job.status === "completed" || job.status === "failed") return job;
     }
     return { jobId, status: "failed", stage: null, examId: null, error: "Timed out", progress: null };
   }
+
+  const stageCopy: Record<string, string> = {
+    researching: "Working on it — researching sources…",
+    embedding: "Embedding source material…",
+    generating: "Generating questions…",
+    validating: "Validating and saving…",
+    persisting: "Validating and saving…",
+    completed: "Finalizing…",
+  };
 
   return (
     <div className="flex h-[calc(100vh-5rem)]">
@@ -130,17 +139,32 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
             <p className="text-body-sm text-on-surface-variant/70">Your generated exams will appear here.</p>
           )}
           {exams.map((e) => (
-            <button
+            <div
               key={e.examId}
               className="block w-full text-left p-md rounded-xl bg-surface hover:bg-surface-container transition-colors cursor-pointer"
               onClick={() => onStartExam(e.examId)}
             >
               <div className="flex justify-between items-start mb-xs">
                 <h4 className="font-label-md text-label-md text-on-surface">{e.title}</h4>
-                <span className="bg-surface-variant text-on-surface-variant text-[10px] px-2 py-0.5 rounded-full">{e.status}</span>
+                <span className="flex items-center gap-xs">
+                  <button
+                    type="button"
+                    className="text-on-surface-variant hover:text-primary transition-colors text-sm leading-none"
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      share(e.examId);
+                    }}
+                    disabled={sharingId === e.examId}
+                    aria-label="Share exam"
+                    title="Share exam"
+                  >
+                    {sharingId === e.examId ? "…" : "⤴"}
+                  </button>
+                  <span className="bg-surface-variant text-on-surface-variant text-[10px] px-2 py-0.5 rounded-full">{e.status}</span>
+                </span>
               </div>
               <p className="font-body-sm text-[12px] text-on-surface-variant">{e.questionCount} Qs • {e.mode}</p>
-            </button>
+            </div>
           ))}
         </div>
       </aside>
@@ -251,7 +275,9 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
             <div className="flex w-full justify-start opacity-50">
               <div className="flex items-end gap-sm">
                 <div className="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center mb-1 shrink-0">✦</div>
-                <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl px-4 py-3 animate-pulse">…</div>
+                <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl px-4 py-3 animate-pulse">
+                  <p className="font-body-sm">{stage ? (stageCopy[stage] ?? "Working on it…") : "Working on it…"}</p>
+                </div>
               </div>
             </div>
           )}
