@@ -174,7 +174,7 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
             <span className="text-label-md font-label-md">Exit exam</span>
           </button>
           <span className="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider">Current Exam</span>
-          <h1 className="font-headline-md text-headline-md text-on-surface">AZ-900 Cloud Concepts Practice</h1>
+          <h1 className="font-headline-md text-headline-md text-on-surface">{attempt.title || "Practice Exam"}</h1>
         </div>
         <div className="flex items-center gap-xl flex-wrap">
           <div
@@ -302,7 +302,7 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
           >
             ← Previous
           </button>
-          {!isCert && !rev && (
+          {!isCert && (
             <button
               className="flex items-center justify-center px-lg py-md rounded-lg bg-surface-container-high font-label-md text-on-surface min-w-[120px] disabled:opacity-50"
               onClick={check}
@@ -313,22 +313,22 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
             </button>
           )}
         </div>
-        {isLast ? (
+        <div className="flex gap-md w-full sm:w-auto justify-between sm:justify-end">
           <button
-            className="w-full sm:w-auto flex items-center justify-center px-xl py-md rounded-lg bg-success text-white font-label-md shadow-md hover:bg-[#059669] transition-all disabled:opacity-50"
-            onClick={() => setConfirmSubmit(true)}
-            disabled={submitting}
-          >
-            Submit Exam →
-          </button>
-        ) : (
-          <button
-            className="w-full sm:w-auto flex items-center justify-center px-xl py-md rounded-lg bg-primary text-on-primary font-label-md shadow-md disabled:opacity-50"
+            className="flex items-center justify-center px-lg py-md rounded-lg bg-primary text-on-primary font-label-md min-w-[120px] disabled:opacity-40"
             onClick={next}
+            disabled={isLast}
           >
             Next →
           </button>
-        )}
+          <button
+            className="flex items-center justify-center px-xl py-md rounded-lg bg-success text-white font-label-md shadow-md hover:bg-[#059669] transition-all disabled:opacity-50"
+            onClick={() => setConfirmSubmit(true)}
+            disabled={submitting}
+          >
+            Submit Exam
+          </button>
+        </div>
       </div>
 
       {confirmSubmit && (

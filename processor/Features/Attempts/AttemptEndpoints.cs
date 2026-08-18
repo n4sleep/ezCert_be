@@ -79,6 +79,7 @@ public static class AttemptEndpoints
                 attemptId = attempt.Id,
                 status = attempt.Status,
                 mode = attempt.Mode,
+                title = exam.Title,
                 startedAt = attempt.StartedAt,
                 expiresAt = attempt.ExpiresAt,
                 questions = attempt.Questions.OrderBy(q => q.Ordinal).Select(q => new
