@@ -19,7 +19,7 @@ public static class AttemptEndpoints
     {
         // Start an attempt on a ready exam. Mode is chosen per attempt
         // (practice | certification); default = the exam's mode.
-        app.MapPost("/api/exams/{examId:guid}/attempts", async (Guid examId, EzCertDbContext db, HttpContext ctx, string? mode) =>
+        app.MapPost("/api/exams/{examId:guid}/attempts", async (Guid examId, EzCertDbContext db, HttpContext ctx, string? mode, int? durationMinutes) =>
         {
             var device = GuestIdentity.GetOrCreateDeviceId(ctx);
             var exam = await db.Exams
@@ -31,6 +31,8 @@ public static class AttemptEndpoints
             if (exam.ExpiresAt < DateTime.UtcNow) return Results.Conflict(new { error = "This exam has expired." });
 
             var attemptMode = mode == "certification" ? "certification" : mode == "practice" ? "practice" : exam.Mode;
+            // Per-attempt mock duration override (Exam tab); falls back to the exam's.
+            var attemptMinutes = durationMinutes is > 0 ? Math.Min(durationMinutes.Value, 60) : exam.DurationMinutes;
 
             var attempt = new Attempt
             {
@@ -38,7 +40,7 @@ public static class AttemptEndpoints
                 DeviceId = device,
                 Mode = attemptMode,
                 Status = "in_progress",
-                ExpiresAt = attemptMode == "certification" ? DateTime.UtcNow.AddMinutes(exam.DurationMinutes) : null,
+                ExpiresAt = attemptMode == "certification" ? DateTime.UtcNow.AddMinutes(attemptMinutes) : null,
             };
 
             // Certification sessions get a randomized per-session question order

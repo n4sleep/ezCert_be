@@ -73,6 +73,7 @@ export interface ExamSummary {
   status: string;
   expired: boolean;
   questionCount: number;
+  durationMinutes: number;
   expiresAt: string;
   createdAt: string;
 }

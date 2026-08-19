@@ -14,6 +14,7 @@ export default function App() {
   const [phase, setPhase] = useState<Phase>("chat");
   const [examId, setExamId] = useState<string | null>(null);
   const [examMode, setExamMode] = useState<"practice" | "certification" | undefined>(undefined);
+  const [examDuration, setExamDuration] = useState<number | undefined>(undefined);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [linkError, setLinkError] = useState("");
   const [exams, setExams] = useState<ExamSummary[]>([]);
@@ -55,8 +56,9 @@ export default function App() {
       .catch((e) => setLinkError(e instanceof Error ? e.message : "This exam is unavailable."));
   }, [refresh]);
 
-  function startExam(id: string, mode: "practice" | "certification") {
+  function startExam(id: string, mode: "practice" | "certification", durationMinutes?: number) {
     setExamMode(mode);
+    setExamDuration(durationMinutes);
     setExamId(id);
     setPhase("exam");
   }
@@ -105,16 +107,19 @@ export default function App() {
           <ExamTaking
             examId={examId}
             attemptMode={examMode}
+            attemptDurationMinutes={examDuration}
             onFinished={(id) => {
               setAttemptId(id);
               setExamId(null);
               setExamMode(undefined);
+              setExamDuration(undefined);
               refresh();
               setPhase("review");
             }}
             onAbandon={() => {
               setExamId(null);
               setExamMode(undefined);
+              setExamDuration(undefined);
               refresh();
             }}
           />

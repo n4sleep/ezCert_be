@@ -32,6 +32,7 @@ public static class ExamShareEndpoints
                     // is derived from ExpiresAt. Archived = reserved for future.
                     expired = e.Status == "ready" && e.ExpiresAt < now,
                     questionCount = e.Questions.Count,
+                    durationMinutes = e.DurationMinutes,
                     expiresAt = e.ExpiresAt,
                     createdAt = e.CreatedAt,
                 })

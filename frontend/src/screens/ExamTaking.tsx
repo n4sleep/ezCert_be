@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { request } from "../api/client";
-import type { AnswerResult, AttemptDto } from "../types";
+import type { AnswerResult, AttemptDto, AttemptQuestionDto } from "../types";
 import { useToasts } from "../components/Toast";
 import ConfirmDialog from "../components/ConfirmDialog";
 
 interface Props {
   examId: string;
   attemptMode?: "practice" | "certification";
+  attemptDurationMinutes?: number;
   onFinished: (attemptId: string) => void;
   onAbandon: () => void;
 }
@@ -21,9 +22,10 @@ function formatClock(totalSeconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon }: Props) {
+export default function ExamTaking({ examId, attemptMode, attemptDurationMinutes, onFinished, onAbandon }: Props) {
   const [attempt, setAttempt] = useState<AttemptDto | null>(null);
   const [index, setIndex] = useState(0);
+  const [view, setView] = useState<"single" | "long">("single");
   const [selections, setSelections] = useState<Record<string, string[]>>({});
   const [revealed, setRevealed] = useState<Record<string, AnswerResult>>({});
   const [error, setError] = useState("");
@@ -36,11 +38,14 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
   const { push } = useToasts();
 
   useEffect(() => {
-    const qs = attemptMode ? `?mode=${attemptMode}` : "";
+    const params = new URLSearchParams();
+    if (attemptMode) params.set("mode", attemptMode);
+    if (attemptDurationMinutes) params.set("durationMinutes", String(attemptDurationMinutes));
+    const qs = params.toString() ? `?${params.toString()}` : "";
     request<AttemptDto>(`/api/exams/${examId}/attempts${qs}`, { method: "POST" })
       .then(setAttempt)
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to start exam"));
-  }, [examId, attemptMode]);
+  }, [examId, attemptMode, attemptDurationMinutes]);
 
   // Timer tick (drift-free: recompute from timestamps each second).
   useEffect(() => {
@@ -50,7 +55,6 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
 
   const current = attempt?.questions[index];
   const isLast = attempt !== null && index === attempt.questions.length - 1;
-  const isMulti = current?.type === "multi";
   const isCert = attempt?.mode === "certification";
 
   const answeredCount = Object.values(selections).filter((s) => s.length > 0).length;
@@ -89,11 +93,10 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
     }).catch(() => push("error", "Couldn't save your answer — check your connection."));
   }
 
-  function toggle(choiceId: string) {
-    if (!current) return;
-    const qid = current.attemptQuestionId;
+  function toggle(q: AttemptQuestionDto, choiceId: string) {
+    const qid = q.attemptQuestionId;
     const prev = selections[qid] ?? [];
-    const next = isMulti
+    const next = q.type === "multi"
       ? prev.includes(choiceId)
         ? prev.filter((c) => c !== choiceId)
         : [...prev, choiceId]
@@ -108,15 +111,15 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
     });
   }
 
-  async function check() {
-    if (!current || checking || isCert) return;
+  async function checkFor(q: AttemptQuestionDto) {
+    if (checking || isCert) return;
     setChecking(true);
     try {
       const res = await request<AnswerResult>(`/api/attempts/${attempt!.attemptId}/answers`, {
         method: "POST",
-        body: { attemptQuestionId: current.attemptQuestionId, selected: selections[current.attemptQuestionId] ?? [] },
+        body: { attemptQuestionId: q.attemptQuestionId, selected: selections[q.attemptQuestionId] ?? [] },
       });
-      setRevealed((r) => ({ ...r, [current.attemptQuestionId]: res }));
+      setRevealed((r) => ({ ...r, [q.attemptQuestionId]: res }));
     } catch (e) {
       push("error", e instanceof Error ? e.message : "Couldn't check the answer");
     } finally {
@@ -159,7 +162,95 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
   const selected = selections[current.attemptQuestionId] ?? [];
   const rev = revealed[current.attemptQuestionId];
   const isAnswered = selected.length > 0;
+  const showReveal = !isCert && rev?.isCorrect !== null && rev?.isCorrect !== undefined;
   const timeUp = remainingSeconds !== null && remainingSeconds <= 0;
+
+  // Shared per-question card for both views (state comes from selections/revealed).
+  function renderQuestion(q: AttemptQuestionDto, qIndex: number) {
+    const qSelected = selections[q.attemptQuestionId] ?? [];
+    const qRev = revealed[q.attemptQuestionId];
+    const qAnswered = qSelected.length > 0;
+    const qIsMulti = q.type === "multi";
+    const showReveal = !isCert && qRev?.isCorrect !== null && qRev?.isCorrect !== undefined;
+
+    return (
+      <div key={q.attemptQuestionId} className="bg-surface-container-lowest rounded-xl p-xl shadow-md w-full relative overflow-hidden">
+        <div className="absolute -top-20 -right-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="flex items-start gap-md mb-lg">
+          <div
+            className={
+              "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-headline-md shadow-sm " +
+              (qAnswered ? "bg-primary text-on-primary" : "bg-primary-container text-on-primary ring-1 ring-outline-variant/40")
+            }
+          >
+            {qIndex + 1}
+          </div>
+          <div className="flex flex-col gap-sm pt-xs">
+            <h2 className="font-headline-lg text-headline-lg text-on-surface leading-tight">{q.text}</h2>
+            {qIsMulti && <p className="font-body-sm text-on-surface-variant">Select all that apply.</p>}
+          </div>
+        </div>
+
+        {/* Options */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+          {q.choices.map((c) => {
+            const picked = qSelected.includes(c.label);
+            const isCorrectChoice = showReveal ? qRev?.correct?.includes(c.label) : undefined;
+            const isWrongPick = showReveal ? qRev && picked && !qRev.correct?.includes(c.label) : undefined;
+
+            let cls = "flex items-center p-md rounded-xl shadow-sm transition-all duration-200 w-full text-left ";
+            let labelCls = "w-8 h-8 rounded-full border-2 border-outline flex items-center justify-center font-label-md text-on-surface-variant mr-md ";
+            if (showReveal) {
+              if (isCorrectChoice) {
+                cls += "bg-success-soft ring-2 ring-success-strong shadow-[0_8px_20px_rgba(16,185,129,0.15)]";
+                labelCls = "w-8 h-8 rounded-full bg-success-strong text-white flex items-center justify-center font-label-md mr-md shadow-sm ";
+              } else if (isWrongPick) {
+                cls += "bg-danger-soft ring-2 ring-danger shadow-[0_8px_20px_rgba(198,40,40,0.15)]";
+                labelCls = "w-8 h-8 rounded-full bg-danger text-white flex items-center justify-center font-label-md mr-md shadow-sm ";
+              } else {
+                cls += "bg-surface-container-lowest hover:shadow-md";
+              }
+            } else if (picked) {
+              cls += "bg-secondary-container rounded-xl shadow-[0_8px_20px_rgba(79,70,229,0.15)] ring-2 ring-primary";
+              labelCls = "w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-md mr-md shadow-sm ";
+            } else {
+              cls += "bg-surface-container-lowest hover:shadow-md";
+            }
+
+            return (
+              <button
+                key={c.label}
+                className={cls}
+                onClick={() => toggle(q, c.label)}
+                aria-pressed={picked}
+              >
+                <div className={labelCls}>{c.label}</div>
+                <span className={"font-body-lg flex-grow " + (picked ? "font-semibold" : "")}>{c.text}</span>
+                {picked && !showReveal && <span className="text-primary">●</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {!isCert && qRev && (
+          <div
+            className={
+              "mt-lg rounded-xl p-lg " +
+              (qRev.isCorrect ? "bg-success-soft border border-success-strong/40" : "bg-danger-soft border border-danger/40")
+            }
+          >
+            <h4 className="font-label-md font-bold mb-sm">{qRev.isCorrect ? "✓ Correct" : "✕ Not quite"}</h4>
+            <p className="font-body-sm text-on-surface-variant">{qRev.explanation}</p>
+            {qRev.source && (
+              <a href={qRev.source} target="_blank" rel="noreferrer" className="inline-block mt-sm text-primary font-label-md">
+                Read the source →
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-5rem)] py-xl px-md md:px-xxl gap-xl max-w-container-max mx-auto">
@@ -178,6 +269,21 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
           <h1 className="font-headline-md text-headline-md text-on-surface">{attempt.title || "Practice Exam"}</h1>
         </div>
         <div className="flex items-center gap-xl flex-wrap">
+          <div className="inline-flex items-center gap-xs bg-surface-container-lowest border border-outline-variant/30 rounded-full p-1" role="group" aria-label="View">
+            {(["single", "long"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                className={
+                  "px-md py-xs rounded-full font-label-md transition-colors cursor-pointer " +
+                  (view === v ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-primary")
+                }
+                onClick={() => setView(v)}
+              >
+                {v === "single" ? "Single" : "Long"}
+              </button>
+            ))}
+          </div>
           <div
             className={
               "flex items-center gap-sm px-md py-sm rounded-full border " +
@@ -194,11 +300,13 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
               {remainingSeconds !== null ? "remaining" : "elapsed"}
             </span>
           </div>
-          <div className="flex items-center gap-sm bg-surface-container-lowest px-md py-sm rounded-full border border-outline-variant/30">
-            <span className="font-label-md text-label-md font-bold tabular-nums text-on-surface">
-              Question {index + 1} of {attempt.questions.length}
-            </span>
-          </div>
+          {view === "single" && (
+            <div className="flex items-center gap-sm bg-surface-container-lowest px-md py-sm rounded-full border border-outline-variant/30">
+              <span className="font-label-md text-label-md font-bold tabular-nums text-on-surface">
+                Question {index + 1} of {attempt.questions.length}
+              </span>
+            </div>
+          )}
           <div className="flex flex-col gap-xs min-w-[150px]">
             <div className="flex justify-between w-full">
               <span className="font-label-caps text-label-caps text-on-surface-variant">Progress</span>
@@ -211,132 +319,81 @@ export default function ExamTaking({ examId, attemptMode, onFinished, onAbandon 
         </div>
       </div>
 
-      {/* Question card */}
-      <div className="flex flex-col max-w-4xl mx-auto w-full gap-xl">
-        <div className="bg-surface-container-lowest rounded-xl p-xl shadow-md w-full relative overflow-hidden">
-          <div className="absolute -top-20 -right-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-          <div className="flex items-start gap-md mb-lg">
-            <div
-              className={
-                "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 font-headline-md shadow-sm " +
-                (isAnswered
-                  ? "bg-primary text-on-primary"
-                  : "bg-primary-container text-on-primary ring-1 ring-outline-variant/40")
-              }
-            >
-              {index + 1}
-            </div>
-            <div className="flex flex-col gap-sm pt-xs">
-              <h2 className="font-headline-lg text-headline-lg text-on-surface leading-tight">{current.text}</h2>
-              {isMulti && <p className="font-body-sm text-on-surface-variant">Select all that apply.</p>}
-            </div>
+      {view === "single" ? (
+        <>
+          {/* Question card */}
+          <div className="flex flex-col max-w-4xl mx-auto w-full gap-xl">
+            {renderQuestion(current, index)}
           </div>
 
-          {/* Options */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-            {current.choices.map((c) => {
-              const picked = selected.includes(c.label);
-              const showReveal = !isCert && rev?.isCorrect !== null && rev?.isCorrect !== undefined;
-              const isCorrectChoice = showReveal ? rev?.correct?.includes(c.label) : undefined;
-              const isWrongPick = showReveal ? rev && picked && !rev.correct?.includes(c.label) : undefined;
-
-              let cls = "flex items-center p-md rounded-xl shadow-sm transition-all duration-200 w-full text-left ";
-              let labelCls = "w-8 h-8 rounded-full border-2 border-outline flex items-center justify-center font-label-md text-on-surface-variant mr-md ";
-              if (showReveal) {
-                if (isCorrectChoice) {
-                  cls += "bg-success-soft ring-2 ring-success-strong shadow-[0_8px_20px_rgba(16,185,129,0.15)]";
-                  labelCls = "w-8 h-8 rounded-full bg-success-strong text-white flex items-center justify-center font-label-md mr-md shadow-sm ";
-                } else if (isWrongPick) {
-                  cls += "bg-danger-soft ring-2 ring-danger shadow-[0_8px_20px_rgba(198,40,40,0.15)]";
-                  labelCls = "w-8 h-8 rounded-full bg-danger text-white flex items-center justify-center font-label-md mr-md shadow-sm ";
-                } else {
-                  cls += "bg-surface-container-lowest hover:shadow-md";
-                }
-              } else if (picked) {
-                cls += "bg-secondary-container rounded-xl shadow-[0_8px_20px_rgba(79,70,229,0.15)] ring-2 ring-primary";
-                labelCls = "w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-md mr-md shadow-sm ";
-              } else {
-                cls += "bg-surface-container-lowest hover:shadow-md";
-              }
-
-              return (
+          {/* Footer nav — always free in both modes */}
+          <div className="mt-auto pt-xl flex flex-col sm:flex-row justify-between items-center gap-md max-w-4xl mx-auto w-full pb-xl">
+            <div className="flex gap-md w-full sm:w-auto justify-between sm:justify-start">
+              <button
+                className="flex items-center justify-center px-lg py-md rounded-lg font-label-md text-secondary hover:text-primary min-w-[120px] disabled:opacity-40 disabled:hover:text-secondary"
+                onClick={previous}
+                disabled={index === 0}
+              >
+                ← Previous
+              </button>
+              {!isCert && !showReveal && (
                 <button
-                  key={c.label}
-                  className={cls}
-                  onClick={() => toggle(c.label)}
-                  aria-pressed={picked}
+                  className="flex items-center justify-center px-lg py-md rounded-lg bg-surface-container-high font-label-md text-on-surface min-w-[120px] disabled:opacity-50"
+                  onClick={() => checkFor(current)}
+                  disabled={!isAnswered || checking}
+                  aria-busy={checking}
                 >
-                  <div className={labelCls}>{c.label}</div>
-                  <span className={"font-body-lg flex-grow " + (picked ? "font-semibold" : "")}>{c.text}</span>
-                  {picked && !showReveal && <span className="text-primary">●</span>}
+                  {checking ? "Checking…" : "Check answer"}
                 </button>
-              );
-            })}
+              )}
+            </div>
+            <div className="flex gap-md w-full sm:w-auto justify-between sm:justify-end">
+              <button
+                className="flex items-center justify-center px-lg py-md rounded-lg bg-primary text-on-primary font-label-md min-w-[120px] disabled:opacity-40"
+                onClick={next}
+                disabled={isLast}
+              >
+                Next →
+              </button>
+              <button
+                className={
+                  "flex items-center justify-center px-xl py-md rounded-lg font-label-md shadow-md transition-all disabled:opacity-50 " +
+                  (allAnswered
+                    ? "bg-success text-white hover:bg-[#059669]"
+                    : "bg-surface-container-high text-on-surface-variant")
+                }
+                onClick={() => setConfirmSubmit(true)}
+                disabled={submitting || !allAnswered}
+                title={allAnswered ? "Submit exam" : "Answer all questions to submit"}
+              >
+                Submit Exam
+              </button>
+            </div>
           </div>
-        </div>
-
-        {!isCert && rev && (
-          <div
-            className={
-              "rounded-xl p-lg " +
-              (rev.isCorrect ? "bg-success-soft border border-success-strong/40" : "bg-danger-soft border border-danger/40")
-            }
-          >
-            <h4 className="font-label-md font-bold mb-sm">{rev.isCorrect ? "✓ Correct" : "✕ Not quite"}</h4>
-            <p className="font-body-sm text-on-surface-variant">{rev.explanation}</p>
-            {rev.source && (
-              <a href={rev.source} target="_blank" rel="noreferrer" className="inline-block mt-sm text-primary font-label-md">
-                Read the source →
-              </a>
-            )}
+        </>
+      ) : (
+        <>
+          {/* Long view: all questions */}
+          <div className="flex flex-col gap-xl max-w-4xl mx-auto w-full">
+            {attempt.questions.map((q, i) => renderQuestion(q, i))}
           </div>
-        )}
-      </div>
-
-      {/* Footer nav — always free in both modes */}
-      <div className="mt-auto pt-xl flex flex-col sm:flex-row justify-between items-center gap-md max-w-4xl mx-auto w-full pb-xl">
-        <div className="flex gap-md w-full sm:w-auto justify-between sm:justify-start">
-          <button
-            className="flex items-center justify-center px-lg py-md rounded-lg font-label-md text-secondary hover:text-primary min-w-[120px] disabled:opacity-40 disabled:hover:text-secondary"
-            onClick={previous}
-            disabled={index === 0}
-          >
-            ← Previous
-          </button>
-          {!isCert && (
+          <div className="sticky bottom-0 pt-xl pb-xl max-w-4xl mx-auto w-full flex justify-center bg-gradient-to-t from-surface via-surface/95 to-transparent">
             <button
-              className="flex items-center justify-center px-lg py-md rounded-lg bg-surface-container-high font-label-md text-on-surface min-w-[120px] disabled:opacity-50"
-              onClick={check}
-              disabled={!isAnswered || checking}
-              aria-busy={checking}
+              className={
+                "flex items-center justify-center px-xl py-md rounded-lg font-label-md shadow-md transition-all disabled:opacity-50 " +
+                (allAnswered
+                  ? "bg-success text-white hover:bg-[#059669]"
+                  : "bg-surface-container-high text-on-surface-variant")
+              }
+              onClick={() => setConfirmSubmit(true)}
+              disabled={submitting || !allAnswered}
+              title={allAnswered ? "Submit exam" : "Answer all questions to submit"}
             >
-              {checking ? "Checking…" : "Check answer"}
+              Submit Exam
             </button>
-          )}
-        </div>
-        <div className="flex gap-md w-full sm:w-auto justify-between sm:justify-end">
-          <button
-            className="flex items-center justify-center px-lg py-md rounded-lg bg-primary text-on-primary font-label-md min-w-[120px] disabled:opacity-40"
-            onClick={next}
-            disabled={isLast}
-          >
-            Next →
-          </button>
-          <button
-            className={
-              "flex items-center justify-center px-xl py-md rounded-lg font-label-md shadow-md transition-all disabled:opacity-50 " +
-              (allAnswered
-                ? "bg-success text-white hover:bg-[#059669]"
-                : "bg-surface-container-high text-on-surface-variant")
-            }
-            onClick={() => setConfirmSubmit(true)}
-            disabled={submitting || !allAnswered}
-            title={allAnswered ? "Submit exam" : "Answer all questions to submit"}
-          >
-            Submit Exam
-          </button>
-        </div>
-      </div>
+          </div>
+        </>
+      )}
 
       {confirmSubmit && (
         <ConfirmDialog
