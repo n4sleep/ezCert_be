@@ -154,8 +154,8 @@ export default function ExamConfigCard({ busy, onGenerate, onCancel }: Props) {
         </div>
 
         {/* Questions + duration */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-lg items-stretch">
+          <div className="flex flex-col">
             <label className="font-label-md text-label-md text-on-surface-variant mb-xs block">
               Questions: <span className="font-bold text-on-surface">{count}</span>
             </label>
@@ -167,10 +167,10 @@ export default function ExamConfigCard({ busy, onGenerate, onCancel }: Props) {
               value={count}
               onChange={(e) => setCount(Number(e.target.value))}
               disabled={busy}
-              className="w-full accent-[#863bff]"
+              className="w-full accent-[#863bff] self-center"
               aria-label="Number of questions"
             />
-            <div className="flex justify-between mt-xs">
+            <div className="flex justify-between mt-xs w-full">
               {QUESTION_TICKS.map((t) => (
                 <span
                   key={t}
@@ -183,8 +183,9 @@ export default function ExamConfigCard({ busy, onGenerate, onCancel }: Props) {
                 </span>
               ))}
             </div>
+            <p className="text-[11px] text-on-surface-variant/50 mt-auto pt-xs">Number of questions in the exam.</p>
           </div>
-          <div>
+          <div className="flex flex-col">
             <label className="font-label-md text-label-md text-on-surface-variant mb-xs block">
               Duration (minutes, optional) <span className="text-on-surface-variant/50">· used in Mock mode</span>
             </label>
@@ -192,14 +193,14 @@ export default function ExamConfigCard({ busy, onGenerate, onCancel }: Props) {
               type="number"
               min={1}
               max={60}
-              className={"w-full rounded-lg border border-outline-variant/40 px-md py-sm font-body-sm bg-surface-container-low text-on-surface-variant/80 outline-none focus:ring-2 focus:ring-primary/50"}
+              className="w-16 self-center text-center rounded-lg border border-outline-variant/40 px-sm py-sm font-body-sm bg-surface-container-low text-on-surface-variant/80 outline-none focus:ring-2 focus:ring-primary/50"
               placeholder="auto"
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
               disabled={busy}
               aria-label="Duration in minutes"
             />
-            <p className="text-[11px] text-on-surface-variant/50 mt-xs">Leave empty for auto (questions × 2). Practice has no time limit.</p>
+            <p className="text-[11px] text-on-surface-variant/50 mt-auto pt-xs">Leave empty for auto (questions × 2). Practice has no time limit.</p>
           </div>
         </div>
 

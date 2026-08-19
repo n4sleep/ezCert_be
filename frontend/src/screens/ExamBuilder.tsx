@@ -13,12 +13,61 @@ interface Props {
 
 interface FeedItem {
   id: number;
-  kind: "user" | "bot" | "exam" | "error";
+  kind: "user" | "bot" | "exam" | "error" | "prompt";
   text?: string;
   examId?: string;
+  options?: string[];
 }
 
 let nextId = 1;
+
+const PURPOSE_OPTIONS = ["AZ-900 — Azure Fundamentals", "CLF-C02 — AWS Cloud Practitioner", "Something else — I'll type it myself"];
+
+interface ChatRule {
+  re: RegExp;
+  reply: (input: string) => string;
+}
+
+function cleanGreeting(input: string): string {
+  return input.trim().replace(/[.!?]+$/, "");
+}
+
+// Ordered rules for topic-less chat. First match wins.
+const CHAT_RULES: ChatRule[] = [
+  { re: /^(hi+|hello+|hey+)(\s+(there|guys|everyone))?[.!?]*$/i, reply: (i) => `${cleanGreeting(i)}. What would you like to practice?` },
+  { re: /^(good\s+(morning|afternoon|evening)|gm|gn)[.!?]*$/i, reply: () => "Good to see you! Ready to practice? Pick an exam to get started." },
+  { re: /^(how are you|hi how are you|how r u|how's it going)[.?]*$/i, reply: () => "I'm feeling genius, let's practice!" },
+  { re: /^(thanks|thank you|ty|thx)(\s+(a lot|so much|very much))?[.!?]*$/i, reply: (i) => (/a lot|so much|very much/i.test(i) ? "I'm glad I can help you" : "You're welcome! Whenever you're ready, tell me what to practice.") },
+  { re: /^(help|i need help|help me)[.!?]*$/i, reply: () => "I'm here to help you practice. I create mock exams for AZ-900 or CLF-C02 — or from your own documents and links. What would you like?" },
+  { re: /^(what can you do|what do you do)[.!?]*$/i, reply: () => "I support you to create Exam however you like" },
+  { re: /^(how does this work|how to use|how do i use|how it works)[.!?]*$/i, reply: () => "Simple: tell me the exam topic (or attach your notes/links), adjust questions & duration, and I'll generate a practice exam you can take and review." },
+  { re: /^(who are you|what's your name|whats your name)[.!?]*$/i, reply: () => "I'm ExamGenius - your study companion" },
+  { re: /^(test|testing|testing 1 2 3)[.!?]*$/i, reply: () => "Oops, system is breaking down. Test fail!" },
+  { re: /^\?+$/i, reply: () => "?" },
+  { re: /^[12]$/, reply: () => "If you're picking from my suggestions, click one below — or type the topic you want." },
+  { re: /^(ok|okay|ok got it|alright|sure)[.!?]*$/i, reply: () => "Great — what shall we practice? Pick an exam below or type it." },
+  { re: /^(yes|no|yeah|nope|yep|nah)[.!?]*$/i, reply: () => "ok!" },
+  { re: /^(what|what\?+)$/i, reply: () => "what?" },
+  { re: /^(hello\?+|are you there|you there|anyone there)[.!?]*$/i, reply: () => "No i'm not here at all!!" },
+  { re: /^(nothing|nevermind|never mind|forget it|skip)[.!?]*$/i, reply: () => "No problem! Whenever you're ready, I'll be here to make you an exam." },
+  { re: /^(lol|haha|hahaha|cool|nice|wow|great|awesome|nice one)[.!?]*$/i, reply: () => "Glad you like it! When you're ready to practice, tell me the topic." },
+];
+
+function isCertTopic(text: string): boolean {
+  return /\b(AZ-900|CLF-C02|AI-900|DP-900)\b/i.test(text);
+}
+
+// Returns a reply when the message is a greeting/no-topic pattern; null = proceed.
+function topicLessReply(text: string): string | null {
+  const trimmed = text.trim();
+  for (const rule of CHAT_RULES) {
+    if (rule.re.test(trimmed)) return rule.reply(trimmed);
+  }
+  // Fallback: very short, no cert code, no obvious subject.
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length <= 3 && trimmed.length <= 24 && !isCertTopic(trimmed)) return "What's on your mind?";
+  return null;
+}
 
 export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) {
   const [feed, setFeed] = useState<FeedItem[]>([]);
@@ -79,6 +128,23 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
     if (!text || busy) return;
     setFeed((f) => [...f, { id: nextId++, kind: "user", text }]);
     setPrompt("");
+
+    const reply = isCertTopic(text) ? null : topicLessReply(text);
+    if (reply !== null) {
+      setFeed((f) => [...f, { id: nextId++, kind: "prompt", text: reply, options: PURPOSE_OPTIONS }]);
+      return;
+    }
+    setShowConfig(true);
+  }
+
+  function pickPurpose(topic: string) {
+    if (topic.startsWith("Something else")) {
+      setPrompt("");
+      inputRef.current?.focus();
+      return;
+    }
+    setFeed((f) => [...f, { id: nextId++, kind: "user", text: topic }]);
+    setPrompt(topic);
     setShowConfig(true);
   }
 
@@ -225,6 +291,32 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
                     <div className="w-8 h-8 rounded-full bg-surface-tint text-on-primary flex items-center justify-center mb-1 shadow-sm shrink-0">✦</div>
                     <div className="bg-surface-container-lowest text-on-surface p-lg rounded-2xl rounded-bl-sm shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant/20">
                       <p className="font-body-md leading-relaxed">{item.text}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            if (item.kind === "prompt") {
+              return (
+                <div key={item.id} className="flex w-full justify-start animate-[slideInLeft_0.5s_ease-out]">
+                  <div className="flex items-end gap-sm max-w-[90%] md:max-w-[80%] w-full">
+                    <div className="w-8 h-8 rounded-full bg-surface-tint text-on-primary flex items-center justify-center mb-1 shadow-sm shrink-0">✦</div>
+                    <div className="flex flex-col gap-md w-full">
+                      <div className="bg-surface-container-lowest text-on-surface p-lg rounded-2xl rounded-bl-sm shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant/20 w-fit">
+                        <p className="font-body-md leading-relaxed">{item.text}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-sm">
+                        {(item.options ?? []).map((opt) => (
+                          <button
+                            key={opt}
+                            type="button"
+                            className="px-md py-sm rounded-full bg-surface-container border border-outline-variant/40 text-on-surface font-label-md hover:bg-surface-variant hover:text-primary transition-colors cursor-pointer"
+                            onClick={() => pickPurpose(opt)}
+                          >
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
