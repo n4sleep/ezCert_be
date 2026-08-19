@@ -27,22 +27,40 @@ public class DiscoveryService
     }
 
     // Returns the Qdrant namespaces to retrieve evidence from.
+    // - attached sources: source:{id} for each (mixed grounding with official)
     // - cert topic: official:{CERT}
-    // - arbitrary topic: source:{id} for each newly ingested or reused doc
-    public async Task<List<string>> ResolveNamespacesAsync(string prompt, string? configCert, CancellationToken ct)
+    // - arbitrary topic + autoCrawl ON: Firecrawl search discovery
+    // - arbitrary topic + autoCrawl OFF: attached sources only (else empty)
+    public async Task<List<string>> ResolveNamespacesAsync(string prompt, string? configCert, List<string>? sourceIds, bool autoCrawl, CancellationToken ct)
     {
+        var namespaces = sourceIds?
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => $"source:{id.Trim().TrimStart('{').TrimEnd('}').Replace("-", "")}")
+            .Distinct()
+            .ToList() ?? new List<string>();
+
         if (IsCertTopic(prompt, configCert))
         {
             var cert = string.IsNullOrWhiteSpace(configCert)
                 ? System.Text.RegularExpressions.Regex.Match(prompt, @"\b(AZ-900|CLF-C02|AI-900|DP-900)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Groups[1].Value
                 : configCert;
-            return new List<string> { $"official:{cert.Trim().ToUpperInvariant().Replace("-", "")}" };
+            var official = $"official:{cert.Trim().ToUpperInvariant().Replace("-", "")}";
+            if (!namespaces.Contains(official)) namespaces.Add(official);
+            return namespaces;
+        }
+
+        if (!autoCrawl)
+        {
+            // Manual sources only — if none were provided the worker reports the
+            // clear "no source material" failure.
+            _log.LogInformation("Auto-crawl off for '{Topic}': using {Count} attached source(s)", prompt, namespaces.Count);
+            return namespaces;
         }
 
         if (!_crawler.Configured)
         {
             _log.LogWarning("Arbitrary-topic generation requested but crawler is not configured (Crawler:Url/Secret missing)");
-            return new List<string>();
+            return namespaces.Count > 0 ? namespaces : new List<string>();
         }
 
         List<CrawlerClient.CrawledDocument> docs;
@@ -56,18 +74,17 @@ public class DiscoveryService
             // surfaces as the clear "couldn't find source material" job failure,
             // never as a generic AI error.
             _log.LogWarning(ex, "Discovery failed for '{Topic}'", prompt);
-            return new List<string>();
+            return namespaces.Count > 0 ? namespaces : new List<string>();
         }
         _log.LogInformation("Discovery for '{Topic}': {Count} candidate documents", prompt, docs.Count);
-        if (docs.Count == 0) return new List<string>();
 
-        var namespaces = new List<string>();
         foreach (var doc in docs)
         {
             if (string.IsNullOrWhiteSpace(doc.Markdown)) continue;
-            var source = await _sources.IngestAsync(doc.CanonicalUrl, doc.Title, doc.Markdown, doc.ContentHash, ct);
+            var (source, _) = await _sources.IngestAsync(doc.CanonicalUrl, doc.Title, doc.Markdown, doc.ContentHash, ct);
             if (source is null) continue;
-            namespaces.Add(SourceService.NamespaceFor(source.Id));
+            var ns = SourceService.NamespaceFor(source.Id);
+            if (!namespaces.Contains(ns)) namespaces.Add(ns);
         }
         return namespaces;
     }

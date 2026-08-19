@@ -107,6 +107,7 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "ok", service = "ezcer
 app.MapGenerationEndpoints();
 app.MapAttemptEndpoints();
 app.MapExamShareEndpoints();
+app.MapSourceEndpoints();
 
 // POST /api/admin/seed { cert } -> re-seeds official content into Qdrant (AD-6).
 // Demo/dev only: no auth, but harmless (official content is public docs).

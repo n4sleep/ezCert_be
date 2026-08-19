@@ -82,13 +82,13 @@ public class ProcessingWorker : BackgroundService
             job.Progress = 0.1;
             await db.SaveChangesAsync(ct);
 
-            var cfgCert = GetCertFromConfig(job.ConfigJson);
-            var namespaces = await discovery.ResolveNamespacesAsync(job.Prompt, cfgCert, ct);
+            var cfg = GetJobConfig(job.ConfigJson);
+            var namespaces = await discovery.ResolveNamespacesAsync(job.Prompt, cfg.Cert, cfg.SourceIds, cfg.AutoCrawl, ct);
             if (namespaces.Count == 0)
             {
                 job.Status = "failed";
                 job.Stage = "failed";
-                job.Error = DiscoveryService.IsCertTopic(job.Prompt, cfgCert)
+                job.Error = DiscoveryService.IsCertTopic(job.Prompt, cfg.Cert)
                     ? "Couldn't retrieve source material for this certification — try again shortly."
                     : "Couldn't find enough trustworthy source material for this topic. Try a more specific topic or a known certification (e.g. AZ-900, CLF-C02).";
                 job.Progress = 1;
@@ -104,7 +104,7 @@ public class ProcessingWorker : BackgroundService
             {
                 job.Status = "failed";
                 job.Stage = "failed";
-                job.Error = DiscoveryService.IsCertTopic(job.Prompt, cfgCert)
+                job.Error = DiscoveryService.IsCertTopic(job.Prompt, cfg.Cert)
                     ? "Generation failed after retries — the AI service is unavailable or returned invalid content. Try again shortly."
                     : "Couldn't generate a grounded exam from the discovered material — the retrieved sources were insufficient or the AI service was unavailable. Try again.";
                 job.Progress = 1;
@@ -140,16 +140,30 @@ public class ProcessingWorker : BackgroundService
         }
     }
 
-    private static string? GetCertFromConfig(string configJson)
+    private sealed record JobConfig(string? Cert, List<string>? SourceIds, bool AutoCrawl);
+
+    private static JobConfig GetJobConfig(string configJson)
     {
         try
         {
             using var doc = System.Text.Json.JsonDocument.Parse(configJson);
-            return doc.RootElement.TryGetProperty("cert", out var c) ? c.GetString() : null;
+            var root = doc.RootElement;
+            var cert = root.TryGetProperty("cert", out var c) ? c.GetString() : null;
+            var sourceIds = new List<string>();
+            if (root.TryGetProperty("sourceIds", out var sids) && sids.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var s in sids.EnumerateArray())
+                {
+                    var v = s.GetString();
+                    if (!string.IsNullOrWhiteSpace(v)) sourceIds.Add(v);
+                }
+            }
+            var autoCrawl = !root.TryGetProperty("autoCrawl", out var ac) || ac.ValueKind != System.Text.Json.JsonValueKind.False;
+            return new JobConfig(cert, sourceIds, autoCrawl);
         }
         catch (System.Text.Json.JsonException)
         {
-            return null;
+            return new JobConfig(null, null, true);
         }
     }
 

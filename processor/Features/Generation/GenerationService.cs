@@ -72,7 +72,7 @@ public class GenerationService
             if (onStage is not null) await onStage(attempt > 1 ? "generating" : "validating");
             var raw = await _bedrock.GenerateAsync(user, system, 2500, 0.3f, ct);
             _log.LogDebug("Generation attempt {Attempt} raw output: {Raw}", attempt, raw);
-            var exam = await TryPersistAsync(deviceId, prompt, cert, difficulty, mode, count, raw, evidence, ct);
+            var exam = await TryPersistAsync(deviceId, prompt, cert, difficulty, mode, count, cfg.Title, cfg.DurationMinutes, raw, evidence, ct);
             if (exam is not null)
             {
                 _log.LogInformation("Generation ok on attempt {Attempt} ({Count} questions)", attempt, exam.Questions.Count);
@@ -182,15 +182,19 @@ public class GenerationService
         return list;
     }
 
-    private async Task<Exam?> TryPersistAsync(string deviceId, string prompt, string cert, string difficulty, string mode, int count, string raw, List<EvidenceBlock> evidence, CancellationToken ct)
+    private async Task<Exam?> TryPersistAsync(string deviceId, string prompt, string cert, string difficulty, string mode, int count, string? configTitle, int? configDuration, string raw, List<EvidenceBlock> evidence, CancellationToken ct)
     {
         try
         {
             var doc = JsonDocument.Parse(StripFences(raw));
             if (!doc.RootElement.TryGetProperty("questions", out var qs) || qs.GetArrayLength() == 0)
                 return null;
-            var title = doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() : $"{cert} Practice";
-            if (string.IsNullOrWhiteSpace(title)) title = $"{cert} Practice";
+            var title = configTitle;
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                title = doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() : $"{cert} Practice";
+                if (string.IsNullOrWhiteSpace(title)) title = $"{cert} Practice";
+            }
 
             var exam = new Exam
             {
@@ -200,7 +204,7 @@ public class GenerationService
                 CertificationCode = cert.ToUpperInvariant(),
                 Mode = mode,
                 Difficulty = difficulty,
-                DurationMinutes = Math.Clamp(count * 2, 5, 60),
+                DurationMinutes = configDuration is > 0 ? Math.Min(configDuration.Value, 60) : Math.Clamp(count * 2, 5, 60),
                 PassPercent = 70,
                 Status = "ready",
                 GenerationPrompt = prompt,
@@ -363,5 +367,9 @@ public class GenerationService
         public string? Cert { get; set; }
         public string? Difficulty { get; set; }
         public string? Mode { get; set; }
+        public string? Title { get; set; }
+        public int? DurationMinutes { get; set; }
+        public List<string>? SourceIds { get; set; }
+        public bool? AutoCrawl { get; set; }
     }
 }

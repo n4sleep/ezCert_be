@@ -30,10 +30,10 @@ public class SourceService
     public static string NamespaceFor(Guid sourceId) => $"source:{sourceId:N}";
 
     // Returns the existing Source when the content hash is already ingested,
-    // otherwise ingests and returns the new Source. Null on empty content.
-    public async Task<Source?> IngestAsync(string url, string title, string markdown, string contentHash, CancellationToken ct = default)
+    // otherwise ingests and returns the new Source, plus the chunk count.
+    public async Task<(Source? Source, int ChunkCount)> IngestAsync(string url, string title, string markdown, string contentHash, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(markdown)) return null;
+        if (string.IsNullOrWhiteSpace(markdown)) return (null, 0);
 
         var existing = await _db.SourceDocuments
             .Include(d => d.Source)
@@ -41,7 +41,7 @@ public class SourceService
         if (existing?.Source is not null)
         {
             _log.LogInformation("Source reuse: hash {Hash} already indexed as {SourceId}", contentHash, existing.Source.Id);
-            return existing.Source;
+            return (existing.Source, existing.Source.Documents.Count(d => d.ContentHash == contentHash));
         }
 
         var source = new Source
@@ -94,6 +94,6 @@ public class SourceService
             await _qdrant.UpsertAsync(Collection, points, cancellationToken: ct);
 
         _log.LogInformation("Ingested source {SourceId} ({Total} chunks, ns={Ns})", source.Id, total, ns);
-        return source;
+        return (source, total);
     }
 }

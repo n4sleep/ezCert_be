@@ -17,7 +17,8 @@ export class ApiError extends Error {
 export async function request<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   const { method = "GET", body } = options;
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const isForm = body instanceof FormData;
+  if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
 
   let res: Response;
   try {
@@ -25,7 +26,7 @@ export async function request<T>(path: string, options: { method?: string; body?
       method,
       headers,
       credentials: "include",
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body !== undefined ? (isForm ? body : JSON.stringify(body)) : undefined,
     });
   } catch {
     throw new ApiError(0, "Can't reach the practice server. Check your connection.");

@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { request } from "../api/client";
 import type { ExamJobStatus, ExamSummary } from "../types";
 import { useToasts } from "../components/Toast";
+import ExamConfigCard from "../components/ExamConfigCard";
+import type { ExamGenConfig } from "../components/ExamConfigCard";
 
 interface Props {
   exams: ExamSummary[];
@@ -23,6 +25,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
+  const [showConfig, setShowConfig] = useState(false);
   const [shareFor, setShareFor] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState("");
   const [shareCopied, setShareCopied] = useState(false);
@@ -36,6 +39,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
     setFeed([]);
     setPrompt("");
     setBusy(false);
+    setShowConfig(false);
     setShareFor(null);
     inputRef.current?.focus();
     feedRef.current?.scrollTo({ top: 0 });
@@ -73,15 +77,31 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
   async function submit() {
     const text = prompt.trim();
     if (!text || busy) return;
+    setFeed((f) => [...f, { id: nextId++, kind: "user", text }]);
+    setPrompt("");
+    setShowConfig(true);
+  }
+
+  async function generate(config: ExamGenConfig) {
+    setShowConfig(false);
     setBusy(true);
     setStage(null);
-    setFeed((f) => [...f, { id: nextId++, kind: "user", text }]);
+    const configJson = JSON.stringify({
+      count: config.count,
+      ...(config.durationMinutes ? { durationMinutes: config.durationMinutes } : {}),
+      ...(config.title ? { title: config.title } : {}),
+      sourceIds: config.sourceIds,
+      autoCrawl: config.autoCrawl,
+    });
+    const text = feed.length > 0 && feed[feed.length - 1].kind === "user" ? feed[feed.length - 1].text ?? "" : "";
 
     try {
-      const created = await request<{ jobId: string }>("/api/exam-jobs", { method: "POST", body: { prompt: text } });
+      const created = await request<{ jobId: string }>("/api/exam-jobs", {
+        method: "POST",
+        body: { prompt: text, configJson },
+      });
       const job = await pollJob(created.jobId);
       if (job.status === "completed" && job.examId) {
-        setPrompt("");
         setFeed((f) => [...f, { id: nextId++, kind: "exam", examId: job.examId! }]);
         push("success", "Exam generated");
         onGenerated();
@@ -90,7 +110,6 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
         push("error", "Generation failed — try again");
       }
     } catch (e) {
-      // keep the typed prompt so nothing is lost; surface the error
       setFeed((f) => [...f, { id: nextId++, kind: "error", text: e instanceof Error ? e.message : "Request failed." }]);
       push("error", "Can't reach the practice server");
     } finally {
@@ -304,9 +323,12 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
           )}
         </div>
 
-        {/* Composer */}
+        {/* Composer + config sheet */}
         <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-surface via-surface/90 to-transparent pt-xl pb-lg px-md md:px-xxl z-20">
           <div className="max-w-4xl mx-auto">
+            {showConfig && !busy && (
+              <ExamConfigCard busy={busy} onGenerate={generate} onCancel={() => setShowConfig(false)} />
+            )}
             <div className="relative bg-surface-container-lowest rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.08)] border border-outline-variant/30 flex items-center p-2 focus-within:ring-2 focus-within:ring-primary/50">
               <input
                 ref={inputRef}
