@@ -127,7 +127,7 @@ export default function ExamConfigCard({ busy, onGenerate, onCancel }: Props) {
   const inputCls = "w-full bg-surface border border-outline-variant/40 rounded-lg px-md py-sm font-body-sm text-on-surface outline-none focus:ring-2 focus:ring-primary/50 placeholder-on-surface-variant/50";
 
   return (
-    <div className="max-w-4xl mx-auto w-full bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-[0_8px_32px_rgba(0,0,0,0.08)] p-lg mb-md">
+    <div className="max-w-4xl mx-auto w-full bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-[0_8px_32px_rgba(0,0,0,0.08)] p-lg mb-md max-h-[calc(100vh-12rem)] overflow-y-auto">
       <div className="flex items-center justify-between mb-md">
         <h3 className="font-headline-md text-headline-md text-on-surface">Configure your exam</h3>
         <button
@@ -154,34 +154,36 @@ export default function ExamConfigCard({ busy, onGenerate, onCancel }: Props) {
         </div>
 
         {/* Questions + duration */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-lg items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-lg items-stretch mt-md">
           <div className="flex flex-col">
             <label className="font-label-md text-label-md text-on-surface-variant mb-xs block">
               Questions: <span className="font-bold text-on-surface">{count}</span>
             </label>
-            <input
-              type="range"
-              min={1}
-              max={20}
-              step={1}
-              value={count}
-              onChange={(e) => setCount(Number(e.target.value))}
-              disabled={busy}
-              className="w-full accent-[#863bff] self-center"
-              aria-label="Number of questions"
-            />
-            <div className="flex justify-between mt-xs w-full">
-              {QUESTION_TICKS.map((t) => (
-                <span
-                  key={t}
-                  className={
-                    "text-[11px] px-sm py-xs rounded-full font-label-md " +
-                    (count === t ? "bg-primary text-on-primary" : "text-on-surface-variant/60")
-                  }
-                >
-                  {t}
-                </span>
-              ))}
+            <div className="flex-1 flex flex-col justify-center">
+              <input
+                type="range"
+                min={1}
+                max={20}
+                step={1}
+                value={count}
+                onChange={(e) => setCount(Number(e.target.value))}
+                disabled={busy}
+                className="w-full accent-[#863bff]"
+                aria-label="Number of questions"
+              />
+              <div className="flex justify-between mt-xs w-full">
+                {QUESTION_TICKS.map((t) => (
+                  <span
+                    key={t}
+                    className={
+                      "text-[11px] px-sm py-xs rounded-full font-label-md " +
+                      (count === t ? "bg-primary text-on-primary" : "text-on-surface-variant/60")
+                    }
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
             </div>
             <p className="text-[11px] text-on-surface-variant/50 mt-auto pt-xs">Number of questions in the exam.</p>
           </div>
@@ -189,17 +191,19 @@ export default function ExamConfigCard({ busy, onGenerate, onCancel }: Props) {
             <label className="font-label-md text-label-md text-on-surface-variant mb-xs block">
               Duration (minutes, optional) <span className="text-on-surface-variant/50">· used in Mock mode</span>
             </label>
-            <input
-              type="number"
-              min={1}
-              max={60}
-              className="w-16 self-center text-center rounded-lg border border-outline-variant/40 px-sm py-sm font-body-sm bg-surface-container-low text-on-surface-variant/80 outline-none focus:ring-2 focus:ring-primary/50"
-              placeholder="auto"
-              value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              disabled={busy}
-              aria-label="Duration in minutes"
-            />
+            <div className="flex-1 flex flex-col justify-center">
+              <input
+                type="number"
+                min={1}
+                max={60}
+                className="w-16 self-center text-center rounded-lg border border-outline-variant/40 px-sm py-sm font-body-sm bg-surface-container-low text-on-surface-variant/80 outline-none focus:ring-2 focus:ring-primary/50"
+                placeholder="auto"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                disabled={busy}
+                aria-label="Duration in minutes"
+              />
+            </div>
             <p className="text-[11px] text-on-surface-variant/50 mt-auto pt-xs">Leave empty for auto (questions × 2). Practice has no time limit.</p>
           </div>
         </div>
