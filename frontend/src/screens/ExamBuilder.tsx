@@ -143,7 +143,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
       inputRef.current?.focus();
       return;
     }
-    setFeed((f) => [...f, { id: nextId++, kind: "user", text: topic }]);
+    setFeed([{ id: nextId++, kind: "user", text: topic }]);
     setPrompt(topic);
     setShowConfig(true);
   }
@@ -350,12 +350,6 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
                         <div className="flex flex-wrap gap-4 mt-md">
                           <div className="flex items-center gap-2 text-on-surface-variant bg-surface px-3 py-2 rounded-lg">
                             <span className="font-label-md text-sm">{count} Questions</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-on-surface-variant bg-surface px-3 py-2 rounded-lg">
-                            <span className="font-label-md text-sm">10 Minutes</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-on-surface-variant bg-surface px-3 py-2 rounded-lg">
-                            <span className="font-label-md text-sm">Practice</span>
                           </div>
                         </div>
                       </div>

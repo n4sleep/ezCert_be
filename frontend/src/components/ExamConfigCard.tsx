@@ -188,16 +188,14 @@ export default function ExamConfigCard({ busy, onGenerate, onCancel }: Props) {
             <p className="text-[11px] text-on-surface-variant/50 mt-auto pt-xs">Number of questions in the exam.</p>
           </div>
           <div className="flex flex-col">
-            <label className="font-label-md text-label-md text-on-surface-variant mb-xs block">
-              Duration (minutes, optional) <span className="text-on-surface-variant/50">· used in Mock mode</span>
-            </label>
+            <label className="font-label-md text-label-md text-on-surface-variant mb-xs block">Duration</label>
             <div className="flex-1 flex flex-col justify-center">
               <input
                 type="number"
                 min={1}
                 max={60}
                 className="w-16 self-center text-center rounded-lg border border-outline-variant/40 px-sm py-sm font-body-sm bg-surface-container-low text-on-surface-variant/80 outline-none focus:ring-2 focus:ring-primary/50"
-                placeholder="auto"
+                placeholder="10"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
                 disabled={busy}
