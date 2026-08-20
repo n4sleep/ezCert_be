@@ -31,9 +31,14 @@ Copy `.env.example` → `.env` and fill in values (Firecrawl key optional for lo
 
 ## Design contracts
 
-- Design contract (human-friendly): `_bmad-output/planning-artifacts/design-contract-examgenius-v2.md`
-- UX spines (visual + behavior): `_bmad-output/planning-artifacts/ux-designs/ux-hackathon-2026-08-12/`
-- Architecture spine: `_bmad-output/planning-artifacts/architecture/architecture-hackathon-2026-08-12/`
+- Design contract (human-friendly): [`docs/design/design-contract-examgenius-v2.md`](docs/design/design-contract-examgenius-v2.md)
+- UX spines (visual + behavior): [`docs/ux/DESIGN.md`](docs/ux/DESIGN.md) and [`docs/ux/EXPERIENCE.md`](docs/ux/EXPERIENCE.md)
+- Architecture spine: [`docs/architecture/ARCHITECTURE-SPINE.md`](docs/architecture/ARCHITECTURE-SPINE.md)
+
+## Infra runbooks
+
+- Qdrant + processor deploy: [`docs/qdrant-ec2-processor.md`](docs/qdrant-ec2-processor.md)
+- Bedrock gateway: [`docs/bedrock-gateway.md`](docs/bedrock-gateway.md)
 
 ## Status
 
