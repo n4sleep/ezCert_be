@@ -31,7 +31,7 @@ public class GenerationService
     {
         var cfg = ParseConfig(configJson);
         var count = cfg.Count is > 0 and <= 20 ? cfg.Count!.Value : 5;
-        var cert = string.IsNullOrWhiteSpace(cfg.Cert) ? DetectCert(prompt) : cfg.Cert!;
+        var cert = ResolveCertLabel(prompt, cfg.Cert);
         var difficulty = string.IsNullOrWhiteSpace(cfg.Difficulty) ? DetectDifficulty(prompt) : cfg.Difficulty!;
         var mode = cfg.Mode == "certification" ? "certification" : "practice";
 
@@ -332,10 +332,25 @@ public class GenerationService
         return Regex.Replace(text.ToLowerInvariant().Trim(), @"\s+", " ");
     }
 
-    private static string DetectCert(string prompt)
+    // Known certs keep their code (official RAG); anything else gets a
+    // topic-derived label so the exam isn't mislabeled as a default cert.
+    private static string ResolveCertLabel(string prompt, string? configCert)
     {
+        if (!string.IsNullOrWhiteSpace(configCert)) return configCert;
         var m = Regex.Match(prompt, @"\b(AZ-900|CLF-C02|AI-900|DP-900)\b", RegexOptions.IgnoreCase);
-        return m.Success ? m.Groups[1].Value.ToUpperInvariant() : "AZ-900";
+        if (m.Success) return m.Groups[1].Value.ToUpperInvariant();
+        return DeriveTopicLabel(prompt);
+    }
+
+    private static string DeriveTopicLabel(string prompt)
+    {
+        var cleaned = Regex.Replace(prompt,
+            @"(?i)\b(create|make|give me|practice|exam|questions?|about|on|for|please|with|of|and|my)\b", " ");
+        cleaned = Regex.Replace(cleaned, @"[0-9]", " ");
+        cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim().TrimEnd('.', '!', '?');
+        if (string.IsNullOrWhiteSpace(cleaned)) return "General";
+        if (cleaned.Length > 40) cleaned = cleaned[..40].Trim();
+        return char.ToUpperInvariant(cleaned[0]) + cleaned[1..];
     }
 
     private static string DetectDifficulty(string prompt)

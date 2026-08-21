@@ -15,15 +15,12 @@ interface Props {
 
 interface FeedItem {
   id: number;
-  kind: "user" | "bot" | "exam" | "error" | "prompt";
+  kind: "user" | "bot" | "exam" | "error";
   text?: string;
   examId?: string;
-  options?: string[];
 }
 
 let nextId = 1;
-
-const PURPOSE_OPTIONS = ["AZ-900 — Azure Fundamentals", "CLF-C02 — AWS Cloud Practitioner", "Something else — I'll type it myself"];
 
 interface ChatRule {
   re: RegExp;
@@ -65,9 +62,6 @@ function topicLessReply(text: string): string | null {
   for (const rule of CHAT_RULES) {
     if (rule.re.test(trimmed)) return rule.reply(trimmed);
   }
-  // Fallback: very short, no cert code, no obvious subject.
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length <= 3 && trimmed.length <= 24 && !isCertTopic(trimmed)) return "What's on your mind?";
   return null;
 }
 
@@ -134,20 +128,9 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
 
     const reply = isCertTopic(text) ? null : topicLessReply(text);
     if (reply !== null) {
-      setFeed((f) => [...f, { id: nextId++, kind: "prompt", text: reply, options: PURPOSE_OPTIONS }]);
+      setFeed((f) => [...f, { id: nextId++, kind: "bot", text: reply }]);
       return;
     }
-    setShowConfig(true);
-  }
-
-  function pickPurpose(topic: string) {
-    if (topic.startsWith("Something else")) {
-      setPrompt("");
-      inputRef.current?.focus();
-      return;
-    }
-    setFeed([{ id: nextId++, kind: "user", text: topic }]);
-    setPrompt(topic);
     setShowConfig(true);
   }
 
@@ -164,6 +147,26 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
     });
     const text = feed.length > 0 && feed[feed.length - 1].kind === "user" ? feed[feed.length - 1].text ?? "" : "";
 
+    // Auto-retry once: the first job after an idle/cold backend can fail
+    // transiently (validation on a cold model), but a retry almost always works.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const outcome = await runJob(text, configJson);
+      if (outcome === "ok") {
+        setBusy(false);
+        setStage(null);
+        return;
+      }
+      if (outcome === "error" || attempt === 2) {
+        setBusy(false);
+        setStage(null);
+        return;
+      }
+      // outcome === "retry" — transparently try again
+    }
+  }
+
+  // Returns "ok" (exam generated), "retry" (failed, safe to try once more), or "error" (network-level).
+  async function runJob(text: string, configJson: string): Promise<"ok" | "retry" | "error"> {
     try {
       const created = await request<{ jobId: string }>("/api/exam-jobs", {
         method: "POST",
@@ -174,16 +177,15 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
         setFeed((f) => [...f, { id: nextId++, kind: "exam", examId: job.examId! }]);
         push("success", "Exam generated");
         onGenerated();
-      } else {
-        setFeed((f) => [...f, { id: nextId++, kind: "error", text: job.error ?? "Generation failed." }]);
-        push("error", "Generation failed — try again");
+        return "ok";
       }
+      // Generation failed (cold AI / insufficient sources). One retry is usually enough.
+      setStage("Retrying…");
+      return "retry";
     } catch (e) {
       setFeed((f) => [...f, { id: nextId++, kind: "error", text: e instanceof Error ? e.message : "Request failed." }]);
       push("error", "Can't reach the practice server");
-    } finally {
-      setBusy(false);
-      setStage(null);
+      return "error";
     }
   }
 
@@ -205,6 +207,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
     validating: "Validating and saving…",
     persisting: "Validating and saving…",
     completed: "Finalizing…",
+    "Retrying…": "That attempt hit a snag — retrying…",
   };
 
   function defaultCardMode(summary: ExamSummary | undefined): "practice" | "certification" {
@@ -321,32 +324,6 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
                     <div className="w-8 h-8 rounded-full bg-surface-tint text-on-primary flex items-center justify-center mb-1 shadow-sm shrink-0">✦</div>
                     <div className="bg-surface-container-lowest text-on-surface p-lg rounded-2xl rounded-bl-sm shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant/20">
                       <p className="font-body-md leading-relaxed">{item.text}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-            if (item.kind === "prompt") {
-              return (
-                <div key={item.id} className="flex w-full justify-start animate-[slideInLeft_0.5s_ease-out]">
-                  <div className="flex items-end gap-sm max-w-[90%] md:max-w-[80%] w-full">
-                    <div className="w-8 h-8 rounded-full bg-surface-tint text-on-primary flex items-center justify-center mb-1 shadow-sm shrink-0">✦</div>
-                    <div className="flex flex-col gap-md w-full">
-                      <div className="bg-surface-container-lowest text-on-surface p-lg rounded-2xl rounded-bl-sm shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-outline-variant/20 w-fit">
-                        <p className="font-body-md leading-relaxed">{item.text}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-sm">
-                        {(item.options ?? []).map((opt) => (
-                          <button
-                            key={opt}
-                            type="button"
-                            className="px-md py-sm rounded-full bg-surface-container border border-outline-variant/40 text-on-surface font-label-md hover:bg-surface-variant hover:text-primary transition-colors cursor-pointer"
-                            onClick={() => pickPurpose(opt)}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   </div>
                 </div>
