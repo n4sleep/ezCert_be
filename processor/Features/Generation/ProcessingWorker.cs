@@ -83,6 +83,8 @@ public class ProcessingWorker : BackgroundService
             await db.SaveChangesAsync(ct);
 
             var cfg = GetJobConfig(job.ConfigJson);
+            job.Stage = "searching";
+            await db.SaveChangesAsync(ct);
             var namespaces = await discovery.ResolveNamespacesAsync(job.Prompt, cfg.Cert, cfg.SourceIds, cfg.AutoCrawl, ct);
             if (namespaces.Count == 0)
             {
@@ -111,6 +113,16 @@ public class ProcessingWorker : BackgroundService
             }
             else
             {
+                // Cancelled while generating? Discard the exam so it never surfaces.
+                await db.Entry(job).ReloadAsync(ct);
+                if (job.Status == "cancelled")
+                {
+                    db.Exams.Remove(exam);
+                    job.Progress = 1;
+                    await db.SaveChangesAsync(ct);
+                    _log.LogInformation("Job {JobId} cancelled — generated exam discarded", jobId);
+                    return;
+                }
                 job.ExamId = exam.Id;
                 job.Status = "completed";
                 job.Stage = "completed";

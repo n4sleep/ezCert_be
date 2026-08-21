@@ -59,6 +59,25 @@ public static class GenerationEndpoints
             });
         });
 
+        // Cancel a queued/running job. The worker discards any exam that
+        // finishes after the cancel lands (idempotent).
+        app.MapPost("/api/exam-jobs/{id:guid}/cancel", async (Guid id, EzCertDbContext db, HttpContext ctx) =>
+        {
+            var job = await db.ProcessingJobs.FirstOrDefaultAsync(j => j.Id == id);
+            if (job is null) return Results.NotFound();
+            var device = GuestIdentity.GetOrCreateDeviceId(ctx);
+            if (job.OwnerDeviceId != device) return Results.NotFound();
+
+            if (job.Status == "queued" || job.Status == "running")
+            {
+                job.Status = "cancelled";
+                job.Stage = "cancelled";
+                job.Progress = 1;
+                await db.SaveChangesAsync();
+            }
+            return Results.Ok(new { jobId = job.Id, status = job.Status });
+        });
+
         return app;
     }
 }

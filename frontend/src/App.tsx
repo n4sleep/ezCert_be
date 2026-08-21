@@ -123,14 +123,14 @@ export default function App() {
           <div className="bg-danger-soft text-danger p-lg rounded-xl">{linkError}</div>
         </div>
       )}
-      {phase === "chat" && (
+      <div className={phase === "chat" ? "" : "hidden"} aria-hidden={phase !== "chat"}>
         <ExamBuilder
           exams={visibleExams}
           onStartExam={startExam}
           onGenerated={refresh}
           onDeleteExam={deleteExam}
         />
-      )}
+      </div>
       {examId ? (
         <div className={phase === "exam" ? "" : "hidden"} aria-hidden={phase !== "exam"}>
           <ExamTaking

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { request } from "../api/client";
 import type { ExamJobStatus, ExamSummary } from "../types";
 import { useToasts } from "../components/Toast";
@@ -25,6 +25,18 @@ let nextId = 1;
 interface ChatRule {
   re: RegExp;
   reply: (input: string) => string;
+}
+
+const FEED_STORAGE_KEY = "examgenius.chat.feed";
+
+function loadFeed(): FeedItem[] {
+  try {
+    const raw = sessionStorage.getItem(FEED_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function cleanGreeting(input: string): string {
@@ -66,8 +78,8 @@ function topicLessReply(text: string): string | null {
 }
 
 export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteExam }: Props) {
-  const [feed, setFeed] = useState<FeedItem[]>([]);
-  const [prompt, setPrompt] = useState("");
+const [feed, setFeed] = useState<FeedItem[]>(loadFeed);
+const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
@@ -79,7 +91,19 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
   const [deleteFor, setDeleteFor] = useState<{ examId: string; label: string; count: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const feedRef = useRef<HTMLDivElement>(null);
+  const cancelledRef = useRef(false);
+  const activeJobRef = useRef<string | null>(null);
   const { push } = useToasts();
+
+  // Persist the conversation across reloads (tab switches are covered by App
+  // keeping this component mounted; reloads by sessionStorage).
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FEED_STORAGE_KEY, JSON.stringify(feed));
+    } catch {
+      /* storage unavailable — conversation just won't persist */
+    }
+  }, [feed]);
 
   function newExam() {
     setFeed([]);
@@ -87,6 +111,13 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
     setBusy(false);
     setShowConfig(false);
     setShareFor(null);
+    cancelledRef.current = false;
+    activeJobRef.current = null;
+    try {
+      sessionStorage.removeItem(FEED_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
     inputRef.current?.focus();
     feedRef.current?.scrollTo({ top: 0 });
     push("info", "New conversation started");
@@ -147,11 +178,15 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
     });
     const text = feed.length > 0 && feed[feed.length - 1].kind === "user" ? feed[feed.length - 1].text ?? "" : "";
 
+    cancelledRef.current = false;
+    activeJobRef.current = null;
+
     // Auto-retry once: the first job after an idle/cold backend can fail
     // transiently (validation on a cold model), but a retry almost always works.
     for (let attempt = 1; attempt <= 2; attempt++) {
+      if (cancelledRef.current) break;
       const outcome = await runJob(text, configJson);
-      if (outcome === "ok") {
+      if (outcome === "ok" || outcome === "cancelled") {
         setBusy(false);
         setStage(null);
         return;
@@ -165,15 +200,34 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
     }
   }
 
-  // Returns "ok" (exam generated), "retry" (failed, safe to try once more), or "error" (network-level).
-  async function runJob(text: string, configJson: string): Promise<"ok" | "retry" | "error"> {
+  function cancelGeneration() {
+    cancelledRef.current = true;
+    const jobId = activeJobRef.current;
+    if (jobId) {
+      request(`/api/exam-jobs/${jobId}/cancel`, { method: "POST" }).catch(() => {});
+    }
+    setBusy(false);
+    setStage(null);
+    setFeed((f) => [...f, { id: nextId++, kind: "bot", text: "Generation cancelled." }]);
+    push("info", "Generation cancelled");
+  }
+
+  // Returns "ok" (exam generated), "retry" (failed, safe to try once more),
+  // "cancelled" (user aborted), or "error" (network-level).
+  async function runJob(text: string, configJson: string): Promise<"ok" | "retry" | "cancelled" | "error"> {
     try {
       const created = await request<{ jobId: string }>("/api/exam-jobs", {
         method: "POST",
         body: { prompt: text, configJson },
       });
+      activeJobRef.current = created.jobId;
       const job = await pollJob(created.jobId);
+      if (cancelledRef.current || job.status === "cancelled") {
+        activeJobRef.current = null;
+        return "cancelled";
+      }
       if (job.status === "completed" && job.examId) {
+        activeJobRef.current = null;
         setFeed((f) => [...f, { id: nextId++, kind: "exam", examId: job.examId! }]);
         push("success", "Exam generated");
         onGenerated();
@@ -192,16 +246,20 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
   async function pollJob(jobId: string): Promise<ExamJobStatus> {
     // Generation runs in the background worker now (WS-3A): poll for up to ~3 min.
     for (let i = 0; i < 180; i++) {
+      if (cancelledRef.current) break;
       await new Promise((r) => setTimeout(r, 1000));
       const job = await request<ExamJobStatus>(`/api/exam-jobs/${jobId}`);
       setStage(job.stage);
-      if (job.status === "completed" || job.status === "failed") return job;
+      if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") return job;
     }
+    if (cancelledRef.current)
+      return { jobId, status: "cancelled", stage: null, examId: null, error: null, progress: null };
     return { jobId, status: "failed", stage: null, examId: null, error: "Timed out", progress: null };
   }
 
   const stageCopy: Record<string, string> = {
     researching: "Working on it — researching sources…",
+    searching: "Searching trusted sources…",
     embedding: "Embedding source material…",
     generating: "Generating questions…",
     validating: "Validating and saving…",
@@ -414,11 +472,18 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteE
           })}
 
           {busy && (
-            <div className="flex w-full justify-start opacity-50">
+            <div className="flex w-full justify-start">
               <div className="flex items-end gap-sm">
                 <div className="w-8 h-8 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center mb-1 shrink-0">✦</div>
-                <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl px-4 py-3 animate-pulse">
-                  <p className="font-body-sm">{stage ? (stageCopy[stage] ?? "Working on it…") : "Working on it…"}</p>
+                <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl px-4 py-3">
+                  <p className="font-body-sm animate-pulse">{stage ? (stageCopy[stage] ?? "Working on it…") : "Working on it…"}</p>
+                  <button
+                    className="mt-2 inline-flex items-center gap-xs font-label-sm text-label-sm text-error hover:text-on-error-container transition-colors cursor-pointer"
+                    onClick={cancelGeneration}
+                  >
+                    <span className="inline-block w-2 h-2 rounded-sm bg-current" aria-hidden="true" />
+                    Cancel generation
+                  </button>
                 </div>
               </div>
             </div>

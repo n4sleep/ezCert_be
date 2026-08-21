@@ -78,14 +78,24 @@ public class DiscoveryService
         }
         _log.LogInformation("Discovery for '{Topic}': {Count} candidate documents", prompt, docs.Count);
 
+        // Bound ingestion so ambiguous/vague topics stay fast: at most a few
+        // docs and a chunk cap per job.
+        const int MaxDocs = 3;
+        const int MaxChunks = 24;
+        var ingestedDocs = 0;
+        var totalChunks = 0;
         foreach (var doc in docs)
         {
+            if (ingestedDocs >= MaxDocs || totalChunks >= MaxChunks) break;
             if (string.IsNullOrWhiteSpace(doc.Markdown)) continue;
-            var (source, _) = await _sources.IngestAsync(doc.CanonicalUrl, doc.Title, doc.Markdown, doc.ContentHash, ct);
+            var (source, chunkCount) = await _sources.IngestAsync(doc.CanonicalUrl, doc.Title, doc.Markdown, doc.ContentHash, ct);
             if (source is null) continue;
             var ns = SourceService.NamespaceFor(source.Id);
             if (!namespaces.Contains(ns)) namespaces.Add(ns);
+            ingestedDocs++;
+            totalChunks += chunkCount;
         }
+        _log.LogInformation("Discovery ingestion: {Docs} docs, {Chunks} chunks for '{Topic}'", ingestedDocs, totalChunks, prompt);
         return namespaces;
     }
 }
