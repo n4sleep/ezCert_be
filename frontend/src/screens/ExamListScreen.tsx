@@ -1,16 +1,18 @@
 import { useState } from "react";
 import type { ExamSummary } from "../types";
+import DeleteExamDialog from "../components/DeleteExamDialog";
 
 interface Props {
   exams: ExamSummary[];
   onStartExam: (examId: string, mode: "practice" | "certification", durationMinutes?: number) => void;
+  onDeleteExam: (examId: string) => void;
   onGoChat: () => void;
 }
 
 // Exam tab: list of this device's persisted exams (newest first).
 // Mode (practice | certification) is chosen per attempt here.
 // Empty state: "Tell us what's on your mind" (EXPERIENCE.md State Patterns).
-export default function ExamListScreen({ exams, onStartExam, onGoChat }: Props) {
+export default function ExamListScreen({ exams, onStartExam, onDeleteExam, onGoChat }: Props) {
   if (exams.length === 0) {
     return (
       <div className="max-w-2xl mx-auto p-xl text-center">
@@ -38,20 +40,30 @@ export default function ExamListScreen({ exams, onStartExam, onGoChat }: Props) 
         <p className="text-body-md font-body-md text-on-surface-variant mt-xs">Pick any exam to start or restart it.</p>
       </div>
       {exams.map((e) => (
-        <ExamCard key={e.examId} exam={e} onStartExam={onStartExam} />
+        <ExamCard key={e.examId} exam={e} onStartExam={onStartExam} onDeleteExam={onDeleteExam} />
       ))}
     </div>
   );
 }
 
-function ExamCard({ exam: e, onStartExam }: { exam: ExamSummary; onStartExam: Props["onStartExam"] }) {
+function ExamCard({ exam: e, onStartExam, onDeleteExam }: { exam: ExamSummary; onStartExam: Props["onStartExam"]; onDeleteExam: Props["onDeleteExam"] }) {
   const [mode, setMode] = useState<"practice" | "certification">(
     e.mode === "certification" ? "certification" : "practice"
   );
   const [minutes, setMinutes] = useState(String(e.durationMinutes > 0 ? e.durationMinutes : 10));
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
-    <div className={"bg-surface shadow-sm rounded-xl overflow-hidden transition-shadow " + (e.expired ? "opacity-60" : "hover:shadow-md")}>
+    <div className={"group relative bg-surface shadow-sm rounded-xl overflow-hidden transition-shadow " + (e.expired ? "opacity-60" : "hover:shadow-md")}>
+      <button
+        type="button"
+        className="absolute top-2 right-2 z-10 w-7 h-7 grid place-items-center rounded-lg text-on-surface-variant hover:text-danger hover:bg-danger-soft transition-colors text-base leading-none opacity-0 group-hover:opacity-100 cursor-pointer"
+        onClick={() => setDeleteOpen(true)}
+        aria-label="Delete exam"
+        title="Delete exam"
+      >
+        ×
+      </button>
       <div className="p-lg md:p-xl flex flex-col gap-md">
         <div className="flex-1">
           <div className="flex items-center gap-sm mb-xs">
@@ -110,6 +122,18 @@ function ExamCard({ exam: e, onStartExam }: { exam: ExamSummary; onStartExam: Pr
           </button>
         </div>
       </div>
+
+      {deleteOpen && (
+        <DeleteExamDialog
+          examLabel={e.title}
+          questionCount={e.questionCount}
+          onConfirm={() => {
+            onDeleteExam(e.examId);
+            setDeleteOpen(false);
+          }}
+          onCancel={() => setDeleteOpen(false)}
+        />
+      )}
     </div>
   );
 }

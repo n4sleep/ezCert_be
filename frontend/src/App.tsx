@@ -8,6 +8,18 @@ import ReviewListScreen from "./screens/ReviewListScreen";
 import { request } from "./api/client";
 import type { AttemptSummary, ExamSummary } from "./types";
 
+const DELETED_KEY = "examgenius.deletedExamIds";
+
+function loadDeleted(): string[] {
+  try {
+    const raw = localStorage.getItem(DELETED_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 type Phase = "chat" | "exam" | "review";
 
 export default function App() {
@@ -19,6 +31,7 @@ export default function App() {
   const [linkError, setLinkError] = useState("");
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [attempts, setAttempts] = useState<AttemptSummary[]>([]);
+  const [deletedIds, setDeletedIds] = useState<string[]>(loadDeleted);
   const [apiDown, setApiDown] = useState(false);
   const [apiNoticeDismissed, setApiNoticeDismissed] = useState(false);
 
@@ -26,6 +39,21 @@ export default function App() {
     request<ExamSummary[]>("/api/exams").then(setExams).catch(() => {});
     request<AttemptSummary[]>("/api/me/attempts").then(setAttempts).catch(() => {});
   }, []);
+
+  // Local-only exam hiding (the DB keeps the exam until it expires).
+  const visibleExams = exams.filter((e) => !deletedIds.includes(e.examId));
+
+  function deleteExam(examId: string) {
+    setDeletedIds((prev) => {
+      const next = prev.includes(examId) ? prev : [...prev, examId];
+      try {
+        localStorage.setItem(DELETED_KEY, JSON.stringify(next));
+      } catch {
+        /* storage unavailable — hide for this session only */
+      }
+      return next;
+    });
+  }
 
   // Health ping: a dead API must look like "service down", not a fresh install
   // (the exam/attempt lists fail silently by design).
@@ -97,9 +125,10 @@ export default function App() {
       )}
       {phase === "chat" && (
         <ExamBuilder
-          exams={exams}
+          exams={visibleExams}
           onStartExam={startExam}
           onGenerated={refresh}
+          onDeleteExam={deleteExam}
         />
       )}
       {examId ? (
@@ -126,8 +155,9 @@ export default function App() {
         </div>
       ) : phase === "exam" ? (
         <ExamListScreen
-          exams={exams}
+          exams={visibleExams}
           onStartExam={startExam}
+          onDeleteExam={deleteExam}
           onGoChat={() => setPhase("chat")}
         />
       ) : null}

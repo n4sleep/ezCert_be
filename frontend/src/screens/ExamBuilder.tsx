@@ -4,11 +4,13 @@ import type { ExamJobStatus, ExamSummary } from "../types";
 import { useToasts } from "../components/Toast";
 import ExamConfigCard from "../components/ExamConfigCard";
 import type { ExamGenConfig } from "../components/ExamConfigCard";
+import DeleteExamDialog from "../components/DeleteExamDialog";
 
 interface Props {
   exams: ExamSummary[];
   onStartExam: (examId: string, mode: "practice" | "certification") => void;
   onGenerated: () => void;
+  onDeleteExam: (examId: string) => void;
 }
 
 interface FeedItem {
@@ -69,7 +71,7 @@ function topicLessReply(text: string): string | null {
   return null;
 }
 
-export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) {
+export default function ExamBuilder({ exams, onStartExam, onGenerated, onDeleteExam }: Props) {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -80,6 +82,7 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
   const [shareCopied, setShareCopied] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [cardModes, setCardModes] = useState<Record<string, "practice" | "certification">>({});
+  const [deleteFor, setDeleteFor] = useState<{ examId: string; label: string; count: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const feedRef = useRef<HTMLDivElement>(null);
   const { push } = useToasts();
@@ -208,6 +211,19 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
     return summary?.mode === "certification" ? "certification" : "practice";
   }
 
+  function askDelete(examId: string, label: string, count: number) {
+    setDeleteFor({ examId, label, count });
+  }
+
+  function confirmDelete() {
+    if (!deleteFor) return;
+    onDeleteExam(deleteFor.examId);
+    // Remove the exam card from the conversation too.
+    setFeed((f) => f.filter((item) => !(item.kind === "exam" && item.examId === deleteFor.examId)));
+    setDeleteFor(null);
+    push("success", "Exam removed from this browser");
+  }
+
   return (
     <div className="flex h-[calc(100vh-5rem)]">
       {/* Left sidebar: Recent Exams */}
@@ -231,24 +247,38 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
           {exams.map((e) => (
             <div
               key={e.examId}
-              className="block w-full text-left p-md rounded-xl bg-surface hover:bg-surface-container transition-colors cursor-pointer"
+              className="group block w-full text-left p-md rounded-xl bg-surface hover:bg-surface-container transition-colors cursor-pointer"
               onClick={() => onStartExam(e.examId, e.mode === "certification" ? "certification" : "practice")}
             >
               <div className="flex justify-between items-start mb-xs">
                 <h4 className="font-label-md text-label-md text-on-surface">{e.title}</h4>
-                <button
-                  type="button"
-                  className="shrink-0 w-8 h-8 grid place-items-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors text-lg leading-none"
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    share(e.examId);
-                  }}
-                  disabled={sharingId === e.examId}
-                  aria-label="Share exam"
-                  title="Share exam"
-                >
-                  {sharingId === e.examId ? "…" : "⤴"}
-                </button>
+                <span className="flex items-center gap-xs shrink-0">
+                  <button
+                    type="button"
+                    className="w-7 h-7 grid place-items-center rounded-lg text-on-surface-variant hover:text-danger hover:bg-danger-soft transition-colors text-base leading-none opacity-0 group-hover:opacity-100 cursor-pointer"
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      askDelete(e.examId, e.title, e.questionCount);
+                    }}
+                    aria-label="Delete exam"
+                    title="Delete exam"
+                  >
+                    ×
+                  </button>
+                  <button
+                    type="button"
+                    className="w-8 h-8 grid place-items-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors text-lg leading-none"
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      share(e.examId);
+                    }}
+                    disabled={sharingId === e.examId}
+                    aria-label="Share exam"
+                    title="Share exam"
+                  >
+                    {sharingId === e.examId ? "…" : "⤴"}
+                  </button>
+                </span>
               </div>
               <p className="font-body-sm text-[12px] text-on-surface-variant">{e.questionCount} Qs • {e.mode === "certification" ? "Mock" : "Practice"}</p>
             </div>
@@ -339,7 +369,16 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
                 <div key={item.id} className="flex w-full justify-start animate-[slideInLeft_0.5s_ease-out]">
                   <div className="flex items-end gap-sm max-w-[90%] md:max-w-[80%]">
                     <div className="w-8 h-8 rounded-full bg-surface-tint text-on-primary flex items-center justify-center mb-1 shadow-sm shrink-0">✦</div>
-                    <div className="bg-surface-container-lowest rounded-2xl p-lg shadow-[0_12px_40px_rgba(0,0,0,0.06)] border border-outline-variant/20 overflow-hidden w-full md:w-[420px]">
+                    <div className="group relative bg-surface-container-lowest rounded-2xl p-lg shadow-[0_12px_40px_rgba(0,0,0,0.06)] border border-outline-variant/20 overflow-hidden w-full md:w-[420px]">
+                      <button
+                        type="button"
+                        className="absolute top-2 right-2 w-7 h-7 grid place-items-center rounded-lg text-on-surface-variant hover:text-danger hover:bg-danger-soft transition-colors text-base leading-none opacity-0 group-hover:opacity-100 cursor-pointer"
+                        onClick={() => askDelete(item.examId!, title, count)}
+                        aria-label="Delete exam"
+                        title="Delete exam"
+                      >
+                        ×
+                      </button>
                       <div className="flex justify-between items-start mb-md">
                         <div className="flex items-center gap-xs bg-secondary-fixed/50 text-on-secondary-fixed px-3 py-1 rounded-full w-fit">
                           <span className="font-label-caps text-[10px] tracking-wider uppercase">Generated</span>
@@ -467,6 +506,16 @@ export default function ExamBuilder({ exams, onStartExam, onGenerated }: Props) 
             </div>
           </div>
         </div>
+      )}
+
+      {/* Delete exam dialog */}
+      {deleteFor && (
+        <DeleteExamDialog
+          examLabel={deleteFor.label}
+          questionCount={deleteFor.count}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteFor(null)}
+        />
       )}
     </div>
   );
